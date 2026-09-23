@@ -22,3 +22,25 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ---------- 安卓相关（Capacitor 打包用）----------
+# 【谁是主力】android/ 目录里还有一份 Capacitor 自己生成的 .gitignore，
+# 它把 build/、.gradle/、*.apk、local.properties 这些都排除了，
+# 而且会跟着 Capacitor 升级自动更新 —— 那份才是主力，别去改它。
+#
+# 【这一段为什么还要写】兜底用的：
+#   1. 万一将来在别的目录下跑 gradle，产物也不会被误提交
+#   2. 签名密钥（.jks / .keystore）绝对不能进仓库 —— 那是 App 的"公章"，
+#      泄露了别人就能冒充你发布更新。这两个后缀必须永远留在本地。
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins/
+*.apk
+*.aab
+*.jks
+*.keystore
