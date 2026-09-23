@@ -148,11 +148,30 @@ export function TrainScreen() {
   function finishWorkout() {
     if (!session) return
 
-    // 一组都没记就直接丢弃，不往历史里塞空记录
-    if (session.entries.length > 0) {
-      // 同一天已有记录的话就替换掉，保证一天只有一条
-      const others = readSessions().filter((s) => s.date !== session.date)
-      writeSessions([...others, session])
+    // 一组都没记：直接丢弃，不往历史里塞空记录，也不用问
+    if (session.entries.length === 0) {
+      clearActiveWorkout()
+      setSession(null)
+      return
+    }
+
+    // 记了东西：先问一句，免得手滑点掉
+    const confirmed = window.confirm(
+      `结束今天的训练吗？\n\n共 ${session.entries.length} 组，会存进历史记录。`,
+    )
+    if (!confirmed) return
+
+    // 【这里的顺序非常关键，是防丢数据最重要的一处】
+    //
+    // 必须"先确认存进历史成功了"，才能清空"正在进行"那一格。
+    // 如果反过来先清空，万一存历史失败（比如手机存储满了），
+    // 这次训练就两头都没了 —— 彻底丢失，找不回来。
+    const others = readSessions().filter((s) => s.date !== session.date)
+    const saved = writeSessions([...others, session])
+    if (!saved) {
+      setStorageError(true)
+      // 故意不清空：数据还留在"正在进行"里，你稍后存储恢复了还能再点一次
+      return
     }
 
     clearActiveWorkout()

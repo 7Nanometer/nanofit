@@ -21,11 +21,14 @@ export function SettingsScreen() {
   const [sub, setSub] = useState<Sub>('list')
   const [settings, setSettings] = useState<Settings>(readSettings)
   const [restPickerOpen, setRestPickerOpen] = useState(false)
+  const [storageError, setStorageError] = useState(false)
 
-  // 改设置的统一出口：先存进储物柜，再更新界面
+  // 改设置的统一出口。先写储物柜，再看写成功没有，
+  // 失败就亮红字警告 —— 和动作库、训练页用的是同一套处理方式。
   function saveSettings(next: Settings) {
+    const ok = writeSettings(next)
     setSettings(next)
-    writeSettings(next)
+    setStorageError(!ok)
   }
 
   // 如果当前在动作库里，就整个换成动作库页面。
@@ -37,6 +40,12 @@ export function SettingsScreen() {
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold">设置</h1>
+
+      {storageError && (
+        <div className="mb-3 rounded-lg border border-brand bg-brand/10 p-3 text-sm text-brand">
+          设置存不进去了，可能是手机存储满了。
+        </div>
+      )}
 
       <div className="space-y-2">
         <SettingRow
