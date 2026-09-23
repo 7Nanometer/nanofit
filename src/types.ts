@@ -93,7 +93,27 @@ export type Template = {
   items: PlannedItem[] // 数组的先后顺序就是动作的先后顺序
 }
 
+// ---------- 性别 ----------
+
+// 体脂率公式里，"男"和"女"用的常数不一样，算出来能差 10.8 个百分点，
+// 所以这个必须问一次，不能瞎猜一个。
+export const SEXES = ['male', 'female'] as const
+
+export type Sex = (typeof SEXES)[number]
+
+// 代号 → 中文。跟在肌群那边是同一套写法。
+export const SEX_LABELS: Record<Sex, string> = {
+  male: '男',
+  female: '女',
+}
+
 // ---------- 身体数据 ----------
+
+// 体脂率是从哪来的。这两个绝不能混在一起分不清：
+//   'measured' —— 你用体脂秤/体测仪量出来的、手填进去的
+//   'formula'  —— App 按身高体重年龄性别，用公式估算的
+// 2026-09-23 之前的旧记录没有这个字段，一律当成 'measured'（那时候只能手填）。
+export type BodyFatSource = 'measured' | 'formula'
 
 // 某一天量的一次数据。date 当身份证号用：一天只有一条
 export type BodyMetric = {
@@ -101,6 +121,7 @@ export type BodyMetric = {
   weightKg?: number
   heightCm?: number // 2026-09-23 按你的决定加入
   bodyFat?: number // 体脂率，如 18 表示 18%
+  bodyFatSource?: BodyFatSource // 这个体脂率是"称的"还是"算的"
 }
 
 // ---------- 设置 ----------
@@ -108,6 +129,10 @@ export type BodyMetric = {
 export type Settings = {
   restSec: number // 组间休息默认多少秒
   rpeEnabled: boolean // 要不要在界面显示 RPE 那一栏
+  sex?: Sex // 体脂率公式要用。没填过就是 undefined
+  // 存"出生年份"而不是"年龄"：过生日的时候年龄会自己长一岁，你永远不用管它。
+  // 存年龄的话，忘了改就会一直用一个偏小的数，算出来的体脂率悄悄偏掉。
+  birthYear?: number
 }
 
 // 第一次打开 App 时用的默认设置

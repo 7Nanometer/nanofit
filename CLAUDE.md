@@ -26,7 +26,14 @@ Exercise { id, name, muscleGroup, equipment, isCustom, note? }
 SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt }
 WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec? }
 Template { id, name, items: { exerciseId, targetSets, targetReps }[] }
-BodyMetric { date, weightKg, heightCm?, bodyFat? }（2026-09-23 按主人决定加入 heightCm）
+BodyMetric { date, weightKg, heightCm?, bodyFat?, bodyFatSource? }
+Settings { restSec, rpeEnabled, sex?, birthYear? }
+
+2026-09-23 按主人决定：
+- BodyMetric 加 heightCm
+- 同日加 bodyFatSource：'measured'（自己称的）/ 'formula'（公式算的）。
+  这两个数在界面上必须分开显示，绝不混在一起。没有这个字段的老记录一律当 measured。
+- Settings 加 sex 和 birthYear（体脂率公式要用）。存出生年份而不是年龄，过生日自动长一岁。
 
 localStorage 前缀 nanofit:v1:。读写集中在 src/lib/storage.ts。支持导出/导入 JSON。
 
@@ -41,3 +48,10 @@ localStorage 前缀 nanofit:v1:。读写集中在 src/lib/storage.ts。支持导
 
 容量 = Σ(weightKg × reps)
 估算 1RM（Epley）= weightKg × (1 + reps / 30)
+BMI = 体重kg ÷ 身高m²
+
+估算体脂率（Deurenberg）：
+  男 = 1.2×BMI + 0.23×年龄 - 16.2
+  女 = 1.2×BMI + 0.23×年龄 - 5.4
+  ★ 它算的是"这种身高体重年龄性别的人平均多少"，不是测量值。
+    误差 ±4～5 个百分点，肌肉多的人会被算高。界面上必须标"估算"。

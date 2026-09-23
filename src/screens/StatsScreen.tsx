@@ -368,7 +368,13 @@ function BodyTrendChart({
   return (
     <ChartCard
       title={title}
-      subtitle={`每次量的记录（${unit}）`}
+      // 体脂这一张要额外说明一句：线上的点未必都是称出来的。
+      // 没手填的那些天，App 按公式估算了一个，不写清楚用户会误会。
+      subtitle={
+        dataKey === 'bodyFat'
+          ? `%（没手填体脂的那些天，按身高体重估算）`
+          : `每次量的记录（${unit}）`
+      }
       rows={points.map((p) => ({ 日期: p.label, [title]: `${p.value} ${unit}` }))}
       columns={[
         { key: '日期', label: '日期' },
