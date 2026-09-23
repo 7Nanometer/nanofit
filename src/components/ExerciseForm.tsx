@@ -70,7 +70,7 @@ export function ExerciseForm({ onSave, onCancel }: Props) {
               // min-h-11 = 44 像素，手指点得准的最小尺寸
               className={`min-h-11 rounded-lg border px-3 text-sm ${
                 muscleGroup === group
-                  ? 'border-brand bg-brand font-semibold text-bg'
+                  ? 'border-brand bg-brand font-semibold text-on-brand'
                   : 'border-line text-ink-2'
               }`}
             >
@@ -116,7 +116,7 @@ export function ExerciseForm({ onSave, onCancel }: Props) {
             type="button"
             onClick={handleSave}
             disabled={!canSave}
-            className="min-h-11 flex-1 rounded-lg bg-brand font-semibold text-bg disabled:opacity-40"
+            className="min-h-11 flex-1 rounded-lg bg-brand font-semibold text-on-brand disabled:opacity-40"
           >
             保存
           </button>

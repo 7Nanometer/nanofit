@@ -64,7 +64,7 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
         <button
           type="button"
           onClick={() => setIsCreating(true)}
-          className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-bg"
+          className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-on-brand"
         >
           + 新建
         </button>
@@ -179,7 +179,7 @@ function FilterChip({
       onClick={onClick}
       className={`min-h-11 shrink-0 rounded-full border px-4 text-sm ${
         active
-          ? 'border-brand bg-brand font-semibold text-bg'
+          ? 'border-brand bg-brand font-semibold text-on-brand'
           : 'border-line text-ink-2'
       }`}
     >

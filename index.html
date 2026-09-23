@@ -27,7 +27,8 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
 
-    <!-- theme-color：手机上地址栏/状态栏会跟着变成这个深黑色 -->
+    <!-- theme-color：手机上地址栏/状态栏会跟着变成这个颜色。
+         日间模式时下面的小脚本会把它改成白色。 -->
     <meta name="theme-color" content="#121212" />
 
     <meta
@@ -36,6 +37,30 @@
     />
 
     <title>NanoFIT</title>
+
+    <!-- 【防止开屏闪一下白光】这段必须放在样式表之前跑。
+         如果不写，打开 App 时浏览器会先按默认的浅色画一遍，
+         等 React 启动后再把主题挂上去 —— 夜间模式的用户就会看到白光一闪。
+         这里直接读储物柜，在第一帧画出来之前就把 data-theme 挂好。
+         用 var 和 catch 是因为：隐私模式下 localStorage 可能不让读，
+         读不到就当夜间处理，绝不能让这段小脚本把整个页面搞挂。 -->
+    <script>
+      var nanoTheme = 'dark'
+      try {
+        var saved = JSON.parse(
+          localStorage.getItem('nanofit:v1:settings') || '{}',
+        )
+        if (saved.theme === 'light') nanoTheme = 'light'
+      } catch (err) {
+        /* 读不到就按夜间处理，绝不能让这段小脚本把整个页面搞挂 */
+      }
+      document.documentElement.dataset.theme = nanoTheme
+      if (nanoTheme === 'light') {
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', '#ffffff')
+      }
+    </script>
   </head>
   <body>
     <!-- 整个 App 会被 React 画进这个 div 里 -->

@@ -1,0 +1,94 @@
+import type { Theme } from '../types'
+
+// 顺手再导出一次，这样用的人既可以 from '../types' 拿，
+// 也可以 from './lib/theme' 拿，不用记它到底住在哪个文件。
+export type { Theme }
+
+// ============================================================
+// 日间／夜间模式
+// ============================================================
+//
+// 【它到底做了什么】
+// 只有一件事：往 <html> 这个标签上挂一个 data-theme="light"。
+// 样式文件（src/index.css）里写着"挂着 light 就用浅色那套变量"，
+// 挂上去的瞬间，全站颜色一起换掉 —— 不需要 React 重画任何东西。
+//
+// 【为什么不做成"每个元素写两遍颜色"】
+// 见 src/index.css 顶部那段说明。
+//
+// 【为什么地址栏颜色也要管】
+// 手机浏览器顶上那条（显示网址的、也就是状态栏）颜色是 <meta name="theme-color">
+// 决定的。它不会跟着 CSS 变量走，必须手动改。
+// 不管它的话，日间模式下页面是白的，顶上却压着一条黑边，很丑。
+// ============================================================
+
+export function applyTheme(theme: Theme): void {
+  document.documentElement.dataset.theme = theme
+
+  // 地址栏的颜色，直接从样式里问"现在的 --color-bg 是多少"，
+  // 而不是在这里再抄一份色值 —— 抄一份就多一个以后写岔的机会。
+  //
+  // 【为什么问得到】
+  // 上一行刚改完 data-theme，浏览器还没重算样式；
+  // 但 getComputedStyle 会强制它立刻重算，所以这里问到的是新主题的值。
+  // 即使浏览器因为优化没有立刻算，最坏结果也只是地址栏颜色慢一拍，
+  // 不影响页面本身的颜色 —— 那个是纯 CSS 管的，一定是对的。
+  const bg = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-bg')
+    .trim()
+
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta !== null && bg !== '') {
+    meta.setAttribute('content', bg)
+  }
+
+  // ---------- iPhone 专用：状态栏上"时间/电量"那几个字用什么颜色 ----------
+  // index.html 里原本写的是 black-translucent —— 意思是状态栏透明、
+  // 页面内容铺到它底下，而那几个字固定是**白色**。
+  // 这在夜间模式（深色底）下正好；但日间模式是白底，白字就看不见了。
+  // 所以这里跟着主题改：白底用 default（系统给白底 + 深色字）。
+  //
+  // 【老实说】这段没法在电脑上验证 —— 需要真 iPhone 装成 PWA 才看得出效果。
+  // 安卓（你现在这台）完全不看这个 meta，改了也不会有副作用。
+  const statusBar = document.querySelector(
+    'meta[name="apple-mobile-web-app-status-bar-style"]',
+  )
+  if (statusBar !== null) {
+    statusBar.setAttribute(
+      'content',
+      theme === 'light' ? 'default' : 'black-translucent',
+    )
+  }
+}
+
+// ============================================================
+// 给图表读颜色
+// ============================================================
+//
+// 【为什么图表不能直接用 bg-brand 这种类名】
+// recharts 是个画 SVG 的库，它要的是**实实在在的颜色值**（#ff4d2e 这种），
+// 而不是"背景色用主色"这种类名。所以统计页里那几个颜色以前是写死的，
+// 结果就是切到日间模式时，图表的线还是深色模式那一套，白底上几乎看不见。
+//
+// 【这里的做法】
+// 现问浏览器："现在 --color-brand 实际是多少？" —— 问到的永远是当前主题的值。
+// 好处是颜色只在 index.css 里定义一次，这里不会跟它写重复、也就不会写岔。
+//
+// 【为什么在组件里要用 useState(chartColors) 这样调用】
+// 在渲染的时候直接读页面样式算"副作用"。用 useState 的惰性初始化，
+// 保证每次进入统计页只读一次，读完就存住。
+export function chartColors() {
+  const style = getComputedStyle(document.documentElement)
+  const read = (name: string, fallback: string): string =>
+    style.getPropertyValue(name).trim() || fallback
+
+  return {
+    brand: read('--color-brand', '#ff4d2e'),
+    muted: read('--color-muted', '#898781'),
+    line: read('--color-line', '#2e2e2e'),
+    surface: read('--color-surface', '#1e1e1e'),
+    ink: read('--color-ink', '#ffffff'),
+    chart2: read('--color-chart-2', '#4da3ff'),
+    chart3: read('--color-chart-3', '#5fd38a'),
+  }
+}

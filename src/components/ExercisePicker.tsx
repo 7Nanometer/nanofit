@@ -69,7 +69,7 @@ export function ExercisePicker({ customExercises, onPick, onClose }: Props) {
             onClick={() => setFilter('all')}
             className={`min-h-11 shrink-0 rounded-full border px-4 text-sm ${
               filter === 'all'
-                ? 'border-brand bg-brand font-semibold text-bg'
+                ? 'border-brand bg-brand font-semibold text-on-brand'
                 : 'border-line text-ink-2'
             }`}
           >
@@ -82,7 +82,7 @@ export function ExercisePicker({ customExercises, onPick, onClose }: Props) {
               onClick={() => setFilter(group)}
               className={`min-h-11 shrink-0 rounded-full border px-4 text-sm ${
                 filter === group
-                  ? 'border-brand bg-brand font-semibold text-bg'
+                  ? 'border-brand bg-brand font-semibold text-on-brand'
                   : 'border-line text-ink-2'
               }`}
             >

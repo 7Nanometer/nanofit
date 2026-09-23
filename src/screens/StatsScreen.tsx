@@ -31,6 +31,7 @@ import type { ExercisePoint } from '../lib/stats'
 import { formatDateCN } from '../lib/date'
 import { ChartCard } from '../components/ChartCard'
 import { StatTile } from '../components/StatTile'
+import { chartColors } from '../lib/theme'
 
 // ============================================================
 // 统计页
@@ -47,33 +48,52 @@ import { StatTile } from '../components/StatTile'
 // 其中一条会被压成贴着底边的一条直线，什么也看不出来。
 // ============================================================
 
-// 图表配色，来自 CLAUDE.md 里定的主色
-const BRAND = '#FF4D2E'
-const MUTED = '#898781'
-const GRID = '#2E2E2E'
-
-// 手指点在图上时弹出来的那个小框的样式。
-// 不写这个的话，recharts 默认给一个白底黑框，在深色界面上非常刺眼。
-const TOOLTIP = {
-  contentStyle: {
-    background: '#1E1E1E',
-    border: '1px solid #2E2E2E',
-    borderRadius: 8,
-    fontSize: 12,
-  },
-  labelStyle: { color: MUTED },
-  itemStyle: { color: '#FFFFFF' },
-} as const
+// ============================================================
+// 图表配色
+// ============================================================
+// 【为什么图表这里不能像别的页面那样直接写 bg-brand 这种类名】
+// recharts 画的是 SVG 图，它要的是**实实在在的颜色值**（#ff4d2e 这种），
+// 不认"背景用主色"这种类名。所以颜色必须在这里以值的形式交给它。
+//
+// 【那怎么让它跟着日间/夜间变】
+// chartColors() 现问浏览器："现在 --color-brand 是多少？"
+// 问到的永远是当前主题的那套值 —— 颜色的定义仍然只有 src/index.css 一处，
+// 这里不会跟它写重复，也就不会写岔。
+//
+// 外面套一层 useState(chartColors) 是有意为之：
+// 读页面样式算"副作用"，包成 useState 的惰性初始化，
+// 就能保证每次进入统计页只读一次、读完存住，而不是每次重画都去问一遍。
+//
+// 【★以后加新图表，颜色都从这里拿，不要写死十六进制】
+// 写死的后果：切到日间模式时那条线还是深色模式的颜色，白底上几乎看不见。
+// ============================================================
 
 // 纵轴上的长数字加上千分位逗号：5240 → 5,240
 function formatAxis(value: number): string {
   return value.toLocaleString()
 }
 
+// 手指点在图上时弹出来的那个小框的样式。
+// 不写这个的话，recharts 默认给一个白底黑框，在深色界面上非常刺眼。
+function tooltipStyle(C: ReturnType<typeof chartColors>) {
+  return {
+    contentStyle: {
+      background: C.surface,
+      border: `1px solid ${C.line}`,
+      borderRadius: 8,
+      fontSize: 12,
+    },
+    labelStyle: { color: C.muted },
+    itemStyle: { color: C.ink },
+  }
+}
+
 export function StatsScreen() {
   const [sessions] = useState<WorkoutSession[]>(readSessions)
   const [customExercises] = useState<Exercise[]>(readCustomExercises)
   const [bodyMetrics] = useState<BodyMetric[]>(readBodyMetrics)
+  // 当前主题下的图表配色，下面 C.brand 这种写法都来自它
+  const [C] = useState(chartColors)
 
   const allExercises = mergeExercises(customExercises)
 
@@ -148,10 +168,10 @@ export function StatsScreen() {
             // 数字看着没毛病，但整整少了一位，很难发现。
             margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-            <XAxis dataKey="label" stroke={MUTED} fontSize={11} tickLine={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+            <XAxis dataKey="label" stroke={C.muted} fontSize={11} tickLine={false} />
             <YAxis
-              stroke={MUTED}
+              stroke={C.muted}
               fontSize={11}
               tickLine={false}
               axisLine={false}
@@ -159,14 +179,14 @@ export function StatsScreen() {
               width={52}
             />
             <Tooltip
-              {...TOOLTIP}
+              {...tooltipStyle(C)}
               formatter={(value) => [
                 `${Number(value).toLocaleString()} kg`,
                 '总容量',
               ]}
               labelFormatter={(label) => `${String(label)} 那一周`}
             />
-            <Bar dataKey="volume" fill={BRAND} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="volume" fill={C.brand} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -201,7 +221,7 @@ export function StatsScreen() {
             subtitle={`${selectedName} · 每次练到的最重那一下（kg）`}
             unit="kg"
             columnLabel="最大重量"
-            color={BRAND}
+            color={C.brand}
           />
           <ProgressChart
             points={points}
@@ -210,7 +230,7 @@ export function StatsScreen() {
             subtitle={`${selectedName} · 每次练的总量（kg）`}
             unit="kg"
             columnLabel="总容量"
-            color="#4DA3FF"
+            color={C.chart2}
             startFromZero
           />
           <ProgressChart
@@ -220,7 +240,7 @@ export function StatsScreen() {
             subtitle={`${selectedName} · 由当天最好的一组反推的一次极限重量（kg）`}
             unit="kg"
             columnLabel="估算 1RM"
-            color="#5FD38A"
+            color={C.chart3}
           />
         </>
       )}
@@ -289,6 +309,8 @@ function ProgressChart({
   // 重量和 1RM 不传，让纵轴自动缩放，否则 80kg 涨到 85kg 这种进步会被压平看不出来
   startFromZero?: boolean
 }) {
+  const [C] = useState(chartColors)
+
   return (
     <ChartCard
       title={title}
@@ -307,16 +329,16 @@ function ProgressChart({
           data={points}
           margin={{ top: 8, right: 10, bottom: 0, left: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
           <XAxis
             dataKey="label"
-            stroke={MUTED}
+            stroke={C.muted}
             fontSize={11}
             tickLine={false}
             minTickGap={24}
           />
           <YAxis
-            stroke={MUTED}
+            stroke={C.muted}
             fontSize={11}
             tickLine={false}
             axisLine={false}
@@ -325,7 +347,7 @@ function ProgressChart({
             width={52}
           />
           <Tooltip
-            {...TOOLTIP}
+            {...tooltipStyle(C)}
             formatter={(value) => [
               `${Number(value).toLocaleString()} ${unit}`,
               columnLabel,
@@ -359,6 +381,8 @@ function BodyTrendChart({
   title: string
   unit: string
 }) {
+  const [C] = useState(chartColors)
+
   // 只保留"这一项真的记了数"的那些日期。
   // 不过滤的话，没记的日期会是个空洞，折线会断开。
   const points = body
@@ -386,16 +410,16 @@ function BodyTrendChart({
           data={points}
           margin={{ top: 8, right: 10, bottom: 0, left: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
           <XAxis
             dataKey="label"
-            stroke={MUTED}
+            stroke={C.muted}
             fontSize={11}
             tickLine={false}
             minTickGap={24}
           />
           <YAxis
-            stroke={MUTED}
+            stroke={C.muted}
             fontSize={11}
             tickLine={false}
             axisLine={false}
@@ -403,13 +427,13 @@ function BodyTrendChart({
             width={52}
           />
           <Tooltip
-            {...TOOLTIP}
+            {...tooltipStyle(C)}
             formatter={(value) => [`${value} ${unit}`, title]}
           />
           <Line
             type="monotone"
             dataKey="value"
-            stroke={BRAND}
+            stroke={C.brand}
             strokeWidth={2}
             dot={{ r: 3 }}
           />

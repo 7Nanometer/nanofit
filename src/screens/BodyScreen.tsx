@@ -206,7 +206,7 @@ export function BodyScreen({ onBack }: { onBack: () => void }) {
               onClick={() => saveProfile({ sex: s })}
               className={`min-h-11 flex-1 rounded-lg border text-sm ${
                 settings.sex === s
-                  ? 'border-brand bg-brand font-semibold text-bg'
+                  ? 'border-brand bg-brand font-semibold text-on-brand'
                   : 'border-line text-ink-2'
               }`}
             >
@@ -300,7 +300,7 @@ export function BodyScreen({ onBack }: { onBack: () => void }) {
           type="button"
           onClick={handleSave}
           disabled={!canSave}
-          className="min-h-11 w-full rounded-lg bg-brand font-semibold text-bg disabled:opacity-40"
+          className="min-h-11 w-full rounded-lg bg-brand font-semibold text-on-brand disabled:opacity-40"
         >
           保存
         </button>

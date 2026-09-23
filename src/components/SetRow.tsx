@@ -61,7 +61,7 @@ export function SetRow({
         onClick={onConfirm}
         disabled={!canConfirm}
         // min-h-11 min-w-11 = 44×44 像素，手指点得准的最小尺寸
-        className="min-h-11 min-w-11 shrink-0 rounded-lg bg-brand text-xl font-bold text-bg disabled:opacity-30"
+        className="min-h-11 min-w-11 shrink-0 rounded-lg bg-brand text-xl font-bold text-on-brand disabled:opacity-30"
       >
         ✓
       </button>

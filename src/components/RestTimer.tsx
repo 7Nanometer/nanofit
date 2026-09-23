@@ -92,7 +92,7 @@ export function RestTimer({ endsAt, onClose }: Props) {
       <button
         type="button"
         onClick={onClose}
-        className="mb-3 w-full rounded-xl bg-brand p-4 text-center text-bg"
+        className="mb-3 w-full rounded-xl bg-brand p-4 text-center text-on-brand"
       >
         <div className="text-lg font-bold">休息结束</div>
         <div className="mt-1 text-sm opacity-80">点一下继续</div>

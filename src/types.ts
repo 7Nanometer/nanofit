@@ -126,6 +126,11 @@ export type BodyMetric = {
 
 // ---------- 设置 ----------
 
+// 外观：日间（白底）还是夜间（原来的深色）。
+// 注意这个类型定义在这里、而不是在 lib/theme.ts —— 因为它是一份**要存进储物柜的数据**，
+// 而 types.ts 是全项目数据形状的唯一出处。theme.ts 反而要从这里引用它。
+export type Theme = 'light' | 'dark'
+
 export type Settings = {
   restSec: number // 组间休息默认多少秒
   rpeEnabled: boolean // 要不要在界面显示 RPE 那一栏
@@ -133,6 +138,7 @@ export type Settings = {
   // 存"出生年份"而不是"年龄"：过生日的时候年龄会自己长一岁，你永远不用管它。
   // 存年龄的话，忘了改就会一直用一个偏小的数，算出来的体脂率悄悄偏掉。
   birthYear?: number
+  theme?: Theme // 没选过就是 undefined，一律按夜间显示
 }
 
 // 第一次打开 App 时用的默认设置

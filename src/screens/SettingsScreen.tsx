@@ -1,11 +1,18 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { Settings } from '../types'
+import type { Settings, Theme } from '../types'
 import { downloadBackup, importBackup } from '../lib/json'
 import { readSettings, writeSettings } from '../lib/storage'
+import { applyTheme } from '../lib/theme'
 import { BodyScreen } from './BodyScreen'
 import { LibraryScreen } from './LibraryScreen'
 import { TemplateScreen } from './TemplateScreen'
+
+// 外观的两个选项。两个按钮比下拉框快，和"个人资料"里选性别是同一个做法。
+const THEMES: { key: Theme; label: string }[] = [
+  { key: 'light', label: '日间（白底）' },
+  { key: 'dark', label: '夜间（深色）' },
+]
 
 // ============================================================
 // "设置"页 —— 按你的决定，这里当工具箱用
@@ -33,6 +40,15 @@ export function SettingsScreen() {
     const ok = writeSettings(next)
     setSettings(next)
     setStorageError(!ok)
+  }
+
+  // 切换外观。两件事必须一起做：
+  //   1. 存进储物柜 —— 下次打开、甚至关了浏览器再开，还记得你选的是哪个
+  //   2. 立刻挂到 <html> 上 —— 这一秒就换颜色，不用刷新
+  // 只做第 1 件的话，要等下次打开才变色；只做第 2 件的话，一刷新就打回原形。
+  function changeTheme(next: Theme) {
+    saveSettings({ ...settings, theme: next })
+    applyTheme(next)
   }
 
   // ---------- 导出 / 导入备份 ----------
@@ -96,6 +112,32 @@ export function SettingsScreen() {
       )}
 
       <div className="space-y-2">
+        {/* ---------- 外观：日间 / 夜间 ---------- */}
+        <div className="rounded-xl border border-line bg-surface p-4">
+          <div className="font-medium text-ink">外观</div>
+          <p className="mt-0.5 text-sm text-muted">
+            日间是白底，夜间是原来的深色。点一下立刻换，也记得住。
+          </p>
+          <div className="mt-3 flex gap-2">
+            {THEMES.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => changeTheme(t.key)}
+                className={`min-h-11 flex-1 rounded-lg border text-sm ${
+                  // 没选过（undefined）就是夜间 —— 和 index.css 的默认值、
+                  // 以及 index.html 里那段防闪白光的脚本保持一致
+                  (settings.theme ?? 'dark') === t.key
+                    ? 'border-brand bg-brand font-semibold text-on-brand'
+                    : 'border-line text-ink-2'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <SettingRow
           label="动作库"
           hint="40 个预置动作 + 自建"
@@ -119,7 +161,7 @@ export function SettingsScreen() {
                 }}
                 className={`min-h-11 rounded-lg border px-3 text-sm ${
                   settings.restSec === sec
-                    ? 'border-brand bg-brand font-semibold text-bg'
+                    ? 'border-brand bg-brand font-semibold text-on-brand'
                     : 'border-line text-ink-2'
                 }`}
               >
@@ -174,7 +216,7 @@ export function SettingsScreen() {
             <button
               type="button"
               onClick={handleExport}
-              className="min-h-11 flex-1 rounded-lg bg-brand font-semibold text-bg"
+              className="min-h-11 flex-1 rounded-lg bg-brand font-semibold text-on-brand"
             >
               导出备份
             </button>

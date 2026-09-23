@@ -77,7 +77,7 @@ export function TemplateScreen({ onBack }: { onBack: () => void }) {
         <button
           type="button"
           onClick={() => setEditing({ id: newId(), name: '', items: [] })}
-          className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-bg"
+          className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-on-brand"
         >
           + 新建
         </button>
@@ -220,7 +220,7 @@ function TemplateEditor({
           onClick={() =>
             onSave({ ...initial, name: name.trim(), items })
           }
-          className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-bg disabled:opacity-40"
+          className="min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-on-brand disabled:opacity-40"
         >
           保存
         </button>

@@ -27,22 +27,33 @@ SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt }
 WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec? }
 Template { id, name, items: { exerciseId, targetSets, targetReps }[] }
 BodyMetric { date, weightKg, heightCm?, bodyFat?, bodyFatSource? }
-Settings { restSec, rpeEnabled, sex?, birthYear? }
+Settings { restSec, rpeEnabled, sex?, birthYear?, theme? }
 
 2026-09-23 按主人决定：
 - BodyMetric 加 heightCm
 - 同日加 bodyFatSource：'measured'（自己称的）/ 'formula'（公式算的）。
   这两个数在界面上必须分开显示，绝不混在一起。没有这个字段的老记录一律当 measured。
 - Settings 加 sex 和 birthYear（体脂率公式要用）。存出生年份而不是年龄，过生日自动长一岁。
+- Settings 加 theme：'light' / 'dark'。没选过（undefined）一律按夜间，和原来的观感一致。
 
 localStorage 前缀 nanofit:v1:。读写集中在 src/lib/storage.ts。支持导出/导入 JSON。
 
 ## 界面
 
 移动优先 375px，桌面居中最大 480px。
-深色：底 #121212 / 卡片 #1E1E1E / 主色 #FF4D2E。
 点击区最小 44×44px。重量与次数输入用 inputMode="decimal"。
 底部 4 tab：训练 / 历史 / 统计 / 设置。
+
+### 配色：两套，靠 CSS 变量整套切换
+
+夜间（默认）：底 #121212 / 卡片 #1E1E1E / 主色 #FF4D2E / 橙红上的字 #121212
+日间：底 #FFFFFF / 卡片 #F5F5F4 / 主色 #D93A1E / 橙红上的字 #FFFFFF
+
+- **颜色只在 src/index.css 的 @theme 里定义一次**，日间那套写在 `:root[data-theme='light']` 里整套覆盖。
+  切换时 JS 只做一件事：往 `<html>` 挂 `data-theme="light"`。
+- **绝不要**给单个元素写两遍（`bg-white dark:bg-[#121212]`）—— 几百处里漏一处，日间模式下就是白底白字。
+- 日间的主色必须比夜间深一档：鲜橙红 #FF4D2E 在白底上当文字只有 3.3:1，达不到 4.5:1。
+- 图表颜色不能写死十六进制（recharts 不认 CSS 类名），用 `lib/theme.ts` 的 `chartColors()` 现读。
 
 ## 公式
 
