@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { TrainScreen } from './screens/TrainScreen'
 
 // ============================================================
 // 这个文件是整个 App 的"外壳"
@@ -40,9 +41,8 @@ function App() {
         {/* 下面这行的 mx-auto + max-w 就是"电脑上居中一条、最宽 480px"的实现：
             mx-auto 让左右两边自动平分剩余空间，效果就是居中。 */}
         <div className="mx-auto w-full max-w-[480px]">
-          {tab === 'train' && (
-            <Placeholder title="训练" hint="阶段 3 会在这里记训练" />
-          )}
+          {/* 训练页已经是真的了（阶段 3 第 1 小步做的），不再是占位文字 */}
+          {tab === 'train' && <TrainScreen />}
           {tab === 'history' && (
             <Placeholder title="历史" hint="阶段 4 会在这里看历史" />
           )}

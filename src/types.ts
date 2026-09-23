@@ -82,6 +82,7 @@ export type WorkoutSession = {
   startedAt?: string // 开始时间，用来算 durationSec
   templateId?: string // 套用的是哪个模板
   plannedItems?: PlannedItem[] // 套用模板后生成的计划清单
+  exerciseIds?: string[] // 这次训练包含哪些动作。★数组的先后顺序 = 界面上从上到下的顺序
 }
 
 // ---------- 训练模板 ----------

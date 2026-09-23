@@ -13,7 +13,8 @@
 // 集中在一处，将来出问题你只需要查这一个文件，不用满项目乱找。
 // ============================================================
 
-import type { Exercise } from '../types'
+import { DEFAULT_SETTINGS } from '../types'
+import type { Exercise, Settings, WorkoutSession } from '../types'
 
 // ---------- 储物柜的格子名 ----------
 //
@@ -77,4 +78,45 @@ export function readCustomExercises(): Exercise[] {
 // 而且自建动作数量很少（几十条），一次全写完全不影响速度。
 export function writeCustomExercises(list: Exercise[]): boolean {
   return write(KEYS.customExercises, list)
+}
+
+// ---------- 设置 ----------
+
+// 读设置。你没改过的话，返回默认值（休息 90 秒、显示 RPE）。
+export function readSettings(): Settings {
+  return read<Settings>(KEYS.settings, DEFAULT_SETTINGS)
+}
+
+export function writeSettings(value: Settings): boolean {
+  return write(KEYS.settings, value)
+}
+
+// ---------- 正在进行、还没结束的那次训练 ----------
+//
+// 【为什么它值得单独占一个格子】
+// 这是整个 App 最重要的一个设计。
+// 你每点一次 ✓，数据就立刻写进这里。
+// 所以练到一半锁屏、关掉浏览器、手机没电关机，重开还在。
+// 如果等"结束训练"才存，中途出任何意外，这一小时的记录就白练了。
+export function readActiveWorkout(): WorkoutSession | null {
+  return read<WorkoutSession | null>(KEYS.activeWorkout, null)
+}
+
+export function writeActiveWorkout(session: WorkoutSession): boolean {
+  return write(KEYS.activeWorkout, session)
+}
+
+// 结束训练时调用，把"正在进行"这个格子清空
+export function clearActiveWorkout(): boolean {
+  return write(KEYS.activeWorkout, null)
+}
+
+// ---------- 已经结束的训练记录 ----------
+
+export function readSessions(): WorkoutSession[] {
+  return read<WorkoutSession[]>(KEYS.sessions, [])
+}
+
+export function writeSessions(list: WorkoutSession[]): boolean {
+  return write(KEYS.sessions, list)
 }
