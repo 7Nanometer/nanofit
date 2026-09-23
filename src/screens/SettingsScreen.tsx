@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { Settings } from '../types'
+import { readSettings, writeSettings } from '../lib/storage'
 import { LibraryScreen } from './LibraryScreen'
 
 // ============================================================
@@ -17,6 +19,14 @@ type Sub = 'list' | 'library'
 
 export function SettingsScreen() {
   const [sub, setSub] = useState<Sub>('list')
+  const [settings, setSettings] = useState<Settings>(readSettings)
+  const [restPickerOpen, setRestPickerOpen] = useState(false)
+
+  // 改设置的统一出口：先存进储物柜，再更新界面
+  function saveSettings(next: Settings) {
+    setSettings(next)
+    writeSettings(next)
+  }
 
   // 如果当前在动作库里，就整个换成动作库页面。
   // 点"返回"时把它设回 'list'，就回到设置列表了。
@@ -34,16 +44,62 @@ export function SettingsScreen() {
           hint="40 个预置动作 + 自建"
           onClick={() => setSub('library')}
         />
+        {/* 休息计时器：点一下展开秒数选项 */}
+        <SettingRow
+          label="休息计时器"
+          hint={`组间休息 ${settings.restSec} 秒`}
+          onClick={() => setRestPickerOpen(!restPickerOpen)}
+        />
+        {restPickerOpen && (
+          <div className="flex flex-wrap gap-2 rounded-xl border border-line bg-surface p-3">
+            {[30, 45, 60, 90, 120, 150, 180].map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => {
+                  saveSettings({ ...settings, restSec: sec })
+                  setRestPickerOpen(false)
+                }}
+                className={`min-h-11 rounded-lg border px-3 text-sm ${
+                  settings.restSec === sec
+                    ? 'border-brand bg-brand font-semibold text-bg'
+                    : 'border-line text-ink-2'
+                }`}
+              >
+                {sec} 秒
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 记录 RPE 的开关 */}
+        <button
+          type="button"
+          onClick={() =>
+            saveSettings({ ...settings, rpeEnabled: !settings.rpeEnabled })
+          }
+          className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-4 text-left"
+        >
+          <div className="flex-1">
+            <div className="font-medium text-ink">记录 RPE</div>
+            <div className="mt-0.5 text-sm text-muted">
+              自感用力程度 1-10。关掉的话，记一组时少填一个框
+            </div>
+          </div>
+          <span
+            className={`shrink-0 text-sm font-semibold ${
+              settings.rpeEnabled ? 'text-brand' : 'text-muted'
+            }`}
+          >
+            {settings.rpeEnabled ? '开' : '关'}
+          </span>
+        </button>
+
         <SettingRow label="训练模板" hint="推日 / 拉日 / 腿日" locked="阶段 4" />
         <SettingRow
           label="身体数据"
           hint="身高、体重、体脂"
           locked="阶段 4"
-        />
-        <SettingRow
-          label="休息计时器"
-          hint="默认 90 秒，可调"
-          locked="阶段 3"
         />
         <SettingRow
           label="导出 / 导入备份"

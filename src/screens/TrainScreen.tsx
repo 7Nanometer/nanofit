@@ -4,6 +4,7 @@ import { mergeExercises } from '../data/exercises'
 import { newId } from '../lib/id'
 import { formatDateCN, todayKey } from '../lib/date'
 import { sessionVolume, textToNumber } from '../lib/calc'
+import { unlockAudio } from '../lib/beep'
 import {
   clearActiveWorkout,
   readActiveWorkout,
@@ -14,6 +15,7 @@ import {
   writeSessions,
 } from '../lib/storage'
 import { ExercisePicker } from '../components/ExercisePicker'
+import { RestTimer } from '../components/RestTimer'
 import { SetRow } from '../components/SetRow'
 
 // ============================================================
@@ -40,6 +42,20 @@ export function TrainScreen() {
   const [settings] = useState<Settings>(readSettings)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [storageError, setStorageError] = useState(false)
+  // 休息倒计时"结束的时间点"。null 表示当前没在休息。
+  // 注意存的是"结束时刻"而不是"还剩几秒"，原因见 RestTimer.tsx 的注释。
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
+
+  // 今天。
+  // 用 useState 的惰性初始化，让它"显示这一页时只算一次"。
+  // 【为什么不直接在显示的地方写 todayKey()】
+  // React 有条规矩：渲染过程必须是"纯"的 —— 同样的输入必须给出同样的结果。
+  // 而"现在几点"每分每秒都在变，在渲染里读它会破坏这条规矩
+  // （检查工具 oxlint 会把它标成警告）。
+  //
+  // 小提醒：真正创建训练记录时用的是实时的 todayKey()（见下面的 addExercise），
+  // 所以哪怕你开着这一页跨过了午夜，记录下来的日期依然是准的。
+  const [today] = useState(todayKey)
 
   // 预置 + 自建，合成一个总列表，用来查出动作的中文名
   const allExercises = mergeExercises(customExercises)
@@ -105,6 +121,18 @@ export function TrainScreen() {
       completedAt: new Date().toISOString(),
     }
     persist({ ...session, entries: [...session.entries, entry] })
+
+    // 记完一组，自动开始休息倒计时。
+    //
+    // 解锁音响也放在这里，因为此刻正处在"用户手指点击"的那一瞬间 ——
+    // 这是浏览器唯一允许我们把音响打开的时机。
+    // 错过这一下，90 秒后想自动响铃就会被浏览器拒绝。
+    unlockAudio()
+    // 下一行的 Date.now() 是安全的：这行代码只有在你点 ✓ 的那一刻才执行，
+    // 属于"事件处理"，不是渲染过程。
+    // 检查工具 oxlint 分不清这两者，会误报一条 react(purity) 警告，所以这里显式忽略它。
+    // oxlint-disable-next-line react/purity
+    setRestEndsAt(Date.now() + settings.restSec * 1000)
   }
 
   // ---------- 删掉记错的一组 ----------
@@ -139,7 +167,7 @@ export function TrainScreen() {
       <div className="mb-4 flex items-start gap-2">
         <div className="flex-1">
           <h1 className="text-xl font-bold">
-            {formatDateCN(session?.date ?? todayKey())}
+            {formatDateCN(session?.date ?? today)}
           </h1>
           <p className="mt-0.5 text-sm text-muted">
             {hasSets
@@ -165,6 +193,11 @@ export function TrainScreen() {
         <div className="mb-3 rounded-lg border border-brand bg-brand/10 p-3 text-sm text-brand">
           存不进去了，可能是手机存储满了。先别继续记，请告诉我。
         </div>
+      )}
+
+      {/* ---------- 休息倒计时 ---------- */}
+      {restEndsAt !== null && (
+        <RestTimer endsAt={restEndsAt} onClose={() => setRestEndsAt(null)} />
       )}
 
       {/* ---------- 每个动作一张卡片 ---------- */}
