@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import type { Settings } from '../types'
+import { downloadBackup, importBackup } from '../lib/json'
 import { readSettings, writeSettings } from '../lib/storage'
 import { BodyScreen } from './BodyScreen'
 import { LibraryScreen } from './LibraryScreen'
@@ -31,6 +33,44 @@ export function SettingsScreen() {
     const ok = writeSettings(next)
     setSettings(next)
     setStorageError(!ok)
+  }
+
+  // ---------- 导出 / 导入备份 ----------
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importMessage, setImportMessage] = useState('')
+  const [importOk, setImportOk] = useState(false)
+
+  function handleExport() {
+    downloadBackup()
+    setImportOk(true)
+    setImportMessage(
+      '已导出。手机上在「文件」App 里，电脑上在「下载」文件夹里。建议顺手发一份到微信收藏。',
+    )
+  }
+
+  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    // 把选择框清空，这样同一个文件连续选两次也能触发
+    e.target.value = ''
+    if (file === undefined) return
+
+    const confirmed = window.confirm(
+      '导入会用备份文件里的数据，覆盖现在手机里的全部记录。\n\n确定要恢复吗？',
+    )
+    if (!confirmed) return
+
+    const result = await importBackup(file)
+
+    if (result.ok) {
+      setImportOk(true)
+      setImportMessage(`导入成功：${result.summary}页面稍后会自动刷新。`)
+      // 各个页面都是"打开的时候才去读数据"的，
+      // 导入完必须刷新一次才能看到新数据
+      window.setTimeout(() => window.location.reload(), 1800)
+    } else {
+      setImportOk(false)
+      setImportMessage(result.message)
+    }
   }
 
   // 如果当前在动作库里，就整个换成动作库页面。
@@ -122,49 +162,77 @@ export function SettingsScreen() {
           hint="身高、体重、体脂"
           onClick={() => setSub('body')}
         />
-        <SettingRow
-          label="导出 / 导入备份"
-          hint="导出成文件保存起来"
-          locked="阶段 6"
-        />
+        {/* ---------- 备份 ---------- */}
+        <div className="rounded-xl border border-line bg-surface p-4">
+          <div className="font-medium text-ink">备份</div>
+          <p className="mt-0.5 text-sm text-muted">
+            数据只存在这台手机里，清缓存或换手机都会丢。
+            建议每周导一次，顺手发到微信收藏。
+          </p>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="min-h-11 flex-1 rounded-lg bg-brand font-semibold text-bg"
+            >
+              导出备份
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="min-h-11 flex-1 rounded-lg border border-line text-ink-2"
+            >
+              导入恢复
+            </button>
+          </div>
+
+          {/* 这个文件选择框是藏起来的，点"导入恢复"按钮才会替你点它 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            onChange={handleImport}
+            className="hidden"
+          />
+
+          {importMessage !== '' && (
+            <p
+              className={`mt-3 text-xs ${
+                importOk ? 'text-ink-2' : 'text-brand'
+              }`}
+            >
+              {importMessage}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
 // 设置列表里的一行。
-// 单独写成一个小零件，是为了 5 行不用把同样的样式抄 5 遍。
+// 单独写成一个小零件，是为了几行不用把同样的样式抄好几遍。
 function SettingRow({
   label,
   hint,
   onClick,
-  locked,
 }: {
   label: string
   hint: string
-  onClick?: () => void
-  locked?: string // 填了阶段号表示"还没做"，这一行会变灰、点不动
+  onClick: () => void
 }) {
-  const disabled = locked !== undefined
-
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={`flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-4 text-left ${
-        disabled ? 'opacity-40' : ''
-      }`}
+      className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-4 text-left"
     >
       <div className="flex-1">
         <div className="font-medium text-ink">{label}</div>
         <div className="mt-0.5 text-sm text-muted">{hint}</div>
       </div>
-      {disabled ? (
-        <span className="shrink-0 text-xs text-muted">{locked}</span>
-      ) : (
-        <span className="shrink-0 text-lg text-muted">›</span>
-      )}
+      <span className="shrink-0 text-lg text-muted">›</span>
     </button>
   )
 }

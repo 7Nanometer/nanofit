@@ -39,7 +39,11 @@ function App() {
     <div className="flex min-h-dvh flex-col bg-bg text-ink">
       {/* 上半部分：当前 tab 的内容。
           flex-1 的意思是"把除底部栏之外剩下的高度全部占满"。 */}
-      <main className="flex-1 px-4 pt-6">
+      {/* 顶部留白要避开 iPhone 的"刘海"和状态栏。
+          env(safe-area-inset-top) 是浏览器告诉我们"顶部被系统占掉了多少像素"。
+          在普通手机上它是 0，max() 就取 1.5rem（也就是原来 pt-6 的效果）。
+          不写这个的话，装到手机桌面后页面标题会被状态栏盖住。 */}
+      <main className="flex-1 px-4 pt-[max(1.5rem,env(safe-area-inset-top))]">
         {/* 下面这行的 mx-auto + max-w 就是"电脑上居中一条、最宽 480px"的实现：
             mx-auto 让左右两边自动平分剩余空间，效果就是居中。 */}
         <div className="mx-auto w-full max-w-[480px]">

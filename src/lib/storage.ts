@@ -37,6 +37,7 @@ export const KEYS = {
   templates: 'nanofit:v1:templates', // 训练模板
   bodyMetrics: 'nanofit:v1:body-metrics', // 身高、体重、体脂
   activeWorkout: 'nanofit:v1:active-workout', // 正在进行、还没结束的那次训练
+  beforeImport: 'nanofit:v1:before-import', // 导入备份之前，先偷偷把现状存一份
 } as const
 
 // ---------- 两个通用工具：读一格、写一格 ----------
@@ -146,6 +147,19 @@ export function readBodyMetrics(): BodyMetric[] {
 
 export function writeBodyMetrics(list: BodyMetric[]): boolean {
   return write(KEYS.bodyMetrics, list)
+}
+
+// ---------- 导入备份前的"保险箱" ----------
+//
+// 用户点"导入备份"时，会先把"现在手机里的东西"整个存进这一格。
+// 万一他选错了文件（比如导入了三个月前的旧备份），
+// 至少还能从这一格里把现在的数据捞回来。
+export function writeSafetyBackup(value: unknown): boolean {
+  return write(KEYS.beforeImport, value)
+}
+
+export function readSafetyBackup(): unknown {
+  return read<unknown>(KEYS.beforeImport, null)
 }
 
 // 按日期写入。同一天已经有记录就**覆盖**那一条，而不是新增一条。

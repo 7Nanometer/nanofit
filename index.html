@@ -2,7 +2,23 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!-- PWA 清单：手机靠它才知道"这个网页可以装到桌面当 App 用"，
+         以及装上去之后叫什么名字、用什么图标、显示成什么颜色 -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <!-- iPhone 专用：加到主屏幕后用这张图当图标。
+         苹果不认上面清单里的图标，必须单独写这一行。 -->
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
+    <!-- 告诉 iPhone：加到主屏幕后要像真 App 一样全屏打开，别显示地址栏 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="NanoFIT" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
 
     <!-- viewport-fit=cover：允许页面铺到 iPhone 的"刘海"和底部横条区域。
          必须配合 CSS 里的安全区留白一起用，否则底部那排按钮会被横条盖住。 -->

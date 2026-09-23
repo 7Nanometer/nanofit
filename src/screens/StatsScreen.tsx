@@ -143,7 +143,10 @@ export function StatsScreen() {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={weeks}
-            margin={{ top: 8, right: 4, bottom: 0, left: -18 }}
+            // 【这个 left 不能是负数】留不出空间的话，纵轴上「12,000」这种
+            // 五位数的标签会被切掉左边一位，显示成「2,000」——
+            // 数字看着没毛病，但整整少了一位，很难发现。
+            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
             <XAxis dataKey="label" stroke={MUTED} fontSize={11} tickLine={false} />
@@ -153,6 +156,7 @@ export function StatsScreen() {
               tickLine={false}
               axisLine={false}
               tickFormatter={formatAxis}
+              width={52}
             />
             <Tooltip
               {...TOOLTIP}
@@ -301,7 +305,7 @@ function ProgressChart({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={points}
-          margin={{ top: 8, right: 10, bottom: 0, left: -18 }}
+          margin={{ top: 8, right: 10, bottom: 0, left: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
           <XAxis
@@ -318,6 +322,7 @@ function ProgressChart({
             axisLine={false}
             tickFormatter={formatAxis}
             domain={startFromZero ? [0, 'auto'] : ['auto', 'auto']}
+            width={52}
           />
           <Tooltip
             {...TOOLTIP}
@@ -373,7 +378,7 @@ function BodyTrendChart({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={points}
-          margin={{ top: 8, right: 10, bottom: 0, left: -18 }}
+          margin={{ top: 8, right: 10, bottom: 0, left: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
           <XAxis
@@ -389,6 +394,7 @@ function BodyTrendChart({
             tickLine={false}
             axisLine={false}
             domain={['auto', 'auto']}
+            width={52}
           />
           <Tooltip
             {...TOOLTIP}

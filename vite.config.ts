@@ -7,5 +7,11 @@ import { defineConfig } from 'vite'
 //   react()      —— 让 Vite 看得懂 React 和 JSX 语法
 //   tailwindcss()—— 把 Tailwind 接进来，负责生成 src/index.css 里定义的颜色和样式
 export default defineConfig({
+  // base 决定打包后文件路径怎么写。
+  // './' 是"相对路径"：不管 App 被放在网址的哪一层，
+  // 它都能找到自己的文件。
+  // 比如部署到 GitHub Pages 后地址是 https://用户名.github.io/nanofit/
+  // 多了一层 /nanofit/，用相对路径就不用改任何配置。
+  base: './',
   plugins: [react(), tailwindcss()],
 })
