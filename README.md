@@ -4,10 +4,31 @@
 
 **没有账号，没有服务器，不做任何联网请求。** 你的训练数据自始至终只存在你自己手机的浏览器里，不会上传到任何地方。
 
+---
+
+## 长什么样
+
+三张都是**真机上直接截的**，没有美化。
+
 <p align="center">
-  <img src="shots/1-train.png" width="245" alt="训练页" />
-  <img src="shots/2-history.png" width="245" alt="历史页" />
-  <img src="shots/3-stats.png" width="245" alt="统计页" />
+  <img src="screenshots/train.png" width="600" alt="训练页" />
+  <br />
+  <em>训练页 —— 填好重量和次数，按那个橙红色的 ✓ 就记下了一组。<br />
+  按下去的那一瞬间数据就已经存进手机了，练到一半锁屏、关浏览器都不会丢。</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/history.png" width="600" alt="历史页" />
+  <br />
+  <em>历史页 —— 按日期倒着排，点「展开」看那天的每一组。<br />
+  上面那个下拉框可以只看某一个动作的历史，用来跟自己三个月前的重量对比。</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/stats.png" width="600" alt="统计页" />
+  <br />
+  <em>统计页 —— 每周总容量的柱状图（截这张时只练过一次，所以只有一根柱子）。<br />
+  往下还有单个动作的最大重量、总容量、估算 1RM 三条曲线。</em>
 </p>
 
 ---
