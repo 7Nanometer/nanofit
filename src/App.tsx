@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { HistoryScreen } from './screens/HistoryScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { StatsScreen } from './screens/StatsScreen'
 import { TrainScreen } from './screens/TrainScreen'
 
 // ============================================================
@@ -46,9 +47,8 @@ function App() {
           {tab === 'train' && <TrainScreen />}
           {/* 历史页已经是真的了（阶段 4 做的） */}
           {tab === 'history' && <HistoryScreen />}
-          {tab === 'stats' && (
-            <Placeholder title="统计" hint="阶段 5 会在这里画图表" />
-          )}
+          {/* 统计页已经是真的了（阶段 5 做的） */}
+          {tab === 'stats' && <StatsScreen />}
           {/* 设置页已经是真的了（阶段 2 做的），不再是占位文字 */}
           {tab === 'settings' && <SettingsScreen />}
         </div>
@@ -78,17 +78,6 @@ function App() {
           })}
         </div>
       </nav>
-    </div>
-  )
-}
-
-// 临时占位块。从阶段 2 开始，它会一个个被真正的页面替换掉。
-// 单独写成一个小零件，是为了 4 个 tab 不用把同样的代码抄 4 遍。
-function Placeholder({ title, hint }: { title: string; hint: string }) {
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
-      <h1 className="text-4xl font-bold">{title}</h1>
-      <p className="text-sm text-muted">{hint}</p>
     </div>
   )
 }
