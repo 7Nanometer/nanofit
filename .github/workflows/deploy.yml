@@ -1,0 +1,81 @@
+# ============================================================
+# 自动部署到 GitHub Pages
+# ============================================================
+#
+# 【这个文件是干什么的】
+# 它是写给 GitHub 的一封信，内容是：
+#   "每次我往 main 分支推新代码，你就自动帮我做两件事：
+#      1. 在云端把代码打包成网页
+#      2. 把打包结果发布到我的网址上"
+#
+# 【为什么需要它】
+# 打包出来的网页在 dist/ 目录里，那个目录不该提交进仓库
+# （它是"产物"，每次打包都会变）。所以让 GitHub 自己在云端打包最干净。
+#
+# 【对用户意味着什么】
+# 你改了代码、推送到 GitHub 之后，等一两分钟，网址上就自动是新版本了。
+# 什么都不用手动做。
+#
+# 【想看看有没有出错】
+# 打开仓库页面 → 上面一排标签里的 "Actions" → 看最新那条是绿色对勾还是红叉。
+# ============================================================
+
+name: 部署到 GitHub Pages
+
+on:
+  # 每次推送到 main 分支就触发
+  push:
+    branches: [main]
+  # 也可以到仓库的 Actions 页面手动点一下运行
+  workflow_dispatch:
+
+# 这个任务需要这些权限：
+#   contents: read —— 读取仓库代码
+#   pages: write  —— 发布网页
+#   id-token: write —— 向 GitHub Pages 证明"我是这个仓库派来的"
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同时只跑一个部署任务。推送频繁时，新的会等旧的跑完。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ---------- 第一步：在云端把代码打包成网页 ----------
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取出仓库代码
+        uses: actions/checkout@v4
+
+      - name: 装好 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 下载项目依赖
+        run: npm ci
+
+      - name: 打包
+        run: npm run build
+
+      - name: 把打包结果交给下一步
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  # ---------- 第二步：发布出去 ----------
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
