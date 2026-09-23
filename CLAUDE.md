@@ -14,6 +14,18 @@
 
 中文、简短、一次一件事。不堆术语，用类比解释。需求有冲突直接说，别照着错的做。
 
+## 这台电脑的环境（2026-09-23 记）
+
+- **网络**：国内，`github.com` 常被卡住，`api.github.com` 通。
+  机器上跑着 Clash Verge（`clash-verge.exe` + `verge-mihomo.exe`，监听 `127.0.0.1:7897`）。
+  **git 不读 Windows 的系统代理设置**，所以本项目已在 `.git/config` 里配了 `http.proxy`。
+  代理没开时 `git push` 会失败（提示连不上 7897）——开起来，或 `git config --local --unset http.proxy`。
+  详细步骤写在 README 的「代码推不上去怎么办」。
+- **`gh` 命令行**在 `/c/Program Files/GitHub CLI/gh.exe`，账号 7Nanometer。
+  它连的是 `api.github.com`，**不需要代理**。但令牌只有 gist / read:org / repo 三个权限，
+  动账户设置（比如加 SSH 密钥）会报 404 并要求 `admin:public_key`。
+- **开发服务器**：`npm run dev`，端口 5173。真机测试用 `npm run dev -- --host` + 局域网 IP（192.168.3.21）。
+
 ## 节奏
 
 一次只推进一个阶段，做完停下告诉主人浏览器能看到什么。

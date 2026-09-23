@@ -178,6 +178,32 @@ PLAN.md                 施工图（功能、数据模型、阶段划分）
 | `lib/theme.ts` 改 iPhone 状态栏那一段 | 没法在电脑上验证，需要真 iPhone 装成 PWA 才看得出。安卓不看这个 meta |
 | `main.tsx` | Service Worker **只在正式打包后注册**。开发时也注册的话，改了代码浏览器会一直显示旧版本 |
 
+### 代码推不上去怎么办（国内网络的常态）
+
+`git push` 报 `Connection was reset` 或者 `Could not connect to server`，八成不是你的错，是 `github.com` 被卡了。先判断是哪个域名不通：
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -m 8 https://github.com      # 000 = 不通
+curl -s -o /dev/null -w "%{http_code}\n" -m 8 https://api.github.com  # 200 = 通
+```
+
+**只要 `api.github.com` 通、`github.com` 不通**，就是典型的域名级封锁。本项目已经配好了走代理（写在 `.git/config` 里，**只影响这一个项目**，不动你的全局设置）：
+
+```bash
+git config --local http.proxy http://127.0.0.1:7897   # 这台机器上的 Clash Verge 监听这个端口
+git config --local --unset http.proxy                 # 想去掉就执行这句
+```
+
+> ⚠️ **代理软件没开着的时候，`git push` 同样会失败**（会提示连不上 7897）。
+> 要么把代理开起来，要么执行上面那句 `--unset`。
+
+**另一条路：SSH。** 走 22 端口，实测**不开代理也能连**，比 HTTPS 稳。本机已经生成好密钥了（`~/.ssh/id_ed25519`），只差登记到 GitHub：
+
+1. 打开 https://github.com/settings/ssh/new ，把 `~/.ssh/id_ed25519.pub` 的**整行内容**粘进去
+2. `git remote set-url origin git@github.com:7Nanometer/nanofit.git`
+
+---
+
 ### 图标怎么改
 
 图标源文件是 `public/favicon.svg`，改完执行：
