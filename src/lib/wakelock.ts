@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core'
+import { KeepAwake } from '@capacitor-community/keep-awake'
+
 // ============================================================
 // 休息期间让手机屏幕别自动熄灭
 // ============================================================
@@ -8,20 +11,34 @@
 //
 // 这个功能就是告诉手机："这段时间先别熄屏。"
 //
-// 【重要限制：浏览器要求 https 才能用】
-// 你现在手机上访问的是 http://192.168.3.21:5173（局域网地址），
-// 属于"不安全的环境"，浏览器会拒绝这个请求 —— 所以现在它不生效。
-// 等阶段 6 部署到 https 之后，它就会自动开始工作，不用再改代码。
+// ------------------------------------------------------------
+// 【两条路（2026-09-23 改的）】
 //
-// 【另一个限制：切到别的 App 时，系统会自动收回】
-// 页面看不见的时候，屏幕常亮会自动失效（这是设计如此，防止网页偷偷耗电）。
-// 所以它只解决"手机放着不动、屏幕自动熄灭"，不解决"主动切走"。
+// 网页版：用浏览器的 Wake Lock API。
+//   · 硬限制：只有 https 才能用。局域网地址 http://192.168.x.x 属于
+//     "不安全的环境"，浏览器会拒绝 —— 所以在局域网真机测试时不生效，
+//     部署到 https 之后会自动开始工作。
+//   · 另一个限制：切到别的 App 时系统会自动收回（这是设计如此，
+//     防止网页偷偷耗电）。所以它只解决"手机放着不动、屏幕自动熄灭"。
+//
+// 安卓版：用 Capacitor 的原生常亮插件。
+//   · 没有 https 那条限制（原生 App 本来就有权限）。
+//   · 也不受"切走就收回"那条限制 —— 它是直接给窗口加了个
+//     "保持常亮"的系统标志，切到别的 App 再切回来，标志还在。
+//     这对健身场景更实用：你切去听个歌，回来屏幕还亮着。
+//
+// 两条路都在下面的 request() / release() 里分流，对外的 setKeepAwake()
+// 一个字没变 —— 用它的地方（RestTimer）完全不用改。
 // ============================================================
 
-let enabled = false // 当前是不是开着
-let sentinel: WakeLockSentinel | null = null // 系统发回来的"凭证"
+// 现在是不是跑在安卓的原生壳里（在浏览器里打开时是 false）
+const isNative = Capacitor.isNativePlatform()
 
-async function request(): Promise<void> {
+let enabled = false // 当前是不是开着
+let sentinel: WakeLockSentinel | null = null // 系统发回来的"凭证"（网页版才用）
+
+// ---------- 网页版：申请常亮 ----------
+async function requestWeb(): Promise<void> {
   try {
     // 有些浏览器根本没有这个功能，先问一句
     if (!('wakeLock' in navigator)) return
@@ -45,7 +62,8 @@ async function request(): Promise<void> {
   }
 }
 
-async function release(): Promise<void> {
+// ---------- 网页版：放开常亮 ----------
+async function releaseWeb(): Promise<void> {
   const current = sentinel
   sentinel = null
   try {
@@ -55,9 +73,34 @@ async function release(): Promise<void> {
   }
 }
 
+// ---------- 安卓版 ----------
+//
+// keepAwake() / allowSleep() 都是原生调用，同样可能失败
+// （比如省电模式拦着），但失败了也没关系 —— 最多是屏幕照常熄灭，
+// 不影响休息计时本身。所以这里一律吞掉错误。
+async function requestNative(): Promise<void> {
+  try {
+    await KeepAwake.keepAwake()
+  } catch {
+    // 忽略
+  }
+}
+
+async function releaseNative(): Promise<void> {
+  try {
+    await KeepAwake.allowSleep()
+  } catch {
+    // 忽略
+  }
+}
+
+// ---------- 网页版专用：切回前台时重新申请 ----------
+//
+// 为什么要这一步：浏览器在你切走时会把常亮收回，切回来不会自动恢复，
+// 得我们自己再申请一次。
+// 安卓版不需要这个 —— 原生标志不会因为你切走就被清掉。
 function onVisibilityChange(): void {
-  // 切回前台时重新申请一次（因为切走时已经被系统收回了）
-  if (!document.hidden) void request()
+  if (!document.hidden) void requestWeb()
 }
 
 // 开关。界面在"开始休息"时打开，休息结束时关掉。
@@ -65,11 +108,16 @@ export function setKeepAwake(on: boolean): void {
   if (on === enabled) return // 状态没变就别重复折腾
   enabled = on
 
+  if (isNative) {
+    void (on ? requestNative() : releaseNative())
+    return
+  }
+
   if (on) {
     document.addEventListener('visibilitychange', onVisibilityChange)
-    void request()
+    void requestWeb()
   } else {
     document.removeEventListener('visibilitychange', onVisibilityChange)
-    void release()
+    void releaseWeb()
   }
 }

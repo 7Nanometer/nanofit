@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { HistoryScreen } from './screens/HistoryScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { StatsScreen } from './screens/StatsScreen'
 import { TrainScreen } from './screens/TrainScreen'
+import { exitApp, handleBack, onBackButton } from './lib/backbutton'
 
 // ============================================================
 // 这个文件是整个 App 的"外壳"
@@ -34,6 +35,39 @@ function App() {
   // setTab 是修改它的唯一方法，改完 React 会自动重画界面。
   const [tab, setTab] = useState<TabKey>('train')
 
+  // ---------- 安卓的物理返回键 ----------
+  //
+  // 【tabRef 是干什么的】
+  // 让"按返回键的那一刻"能读到当前是哪个 tab。
+  //
+  // 【为什么不直接把 tab 写成下面那个 useEffect 的依赖】
+  // 那样每次切换 tab 都会重新挂一次监听。而 backbutton.ts 里的规矩是
+  // "后登记的在更上层、优先处理" —— 重新挂会让 App 这个处理器
+  // 爬到设置页的上面去。结果：你在「设置 → 身体数据」里按返回，
+  // 会被这句"切回训练页"抢先处理，直接跳过设置列表页。
+  // 所以监听只挂一次（依赖数组留空），当前 tab 靠这个 ref 现读。
+  const tabRef = useRef(tab)
+  useEffect(() => {
+    tabRef.current = tab
+  }, [tab])
+
+  useEffect(() => {
+    return onBackButton(() => {
+      // ① 先问各页面拦不拦（设置子页面、训练进行中）
+      if (handleBack()) return
+      // ② 不在训练页 → 先切回训练页。这是很多 App 的返回键手感：
+      //    连按两下才退出，中间那下先回到首页。
+      if (tabRef.current !== 'train') {
+        setTab('train')
+        return
+      }
+      // ③ 已经在训练页、也没人拦 → 退出 App
+      exitApp()
+    })
+    // 在浏览器里打开时 onBackButton 什么都不做，直接返回空的注销函数，
+    // 所以网页版一点影响都没有。
+  }, [])
+
   return (
     // 最外层：深黑底、至少占满一屏高、内容从上往下竖着排
     <div className="flex min-h-dvh flex-col bg-bg text-ink">
@@ -60,9 +94,15 @@ function App() {
 
       {/* 底部那排 tab 按钮。
           sticky bottom-0 = 页面滚动时吸在屏幕底部不动。
-          pb-[env(safe-area-inset-bottom)] = 给 iPhone 底部那条横条留出空位，
-          否则最下面的按钮会被横条压住。非 iPhone 上这个留白是 0，等于没加。 */}
-      <nav className="sticky bottom-0 border-t border-line bg-bg pb-[env(safe-area-inset-bottom)]">
+
+          底部留白用 max(0.5rem, env(safe-area-inset-bottom))：
+            · iPhone 底部那条横条 → 系统会告诉我们多高（约 34px），取它
+            · 安卓的手势条 → 新系统（安卓 15 起强制全屏铺满）也会报高度，取它
+            · 万一某个系统报 0（旧安卓就是），至少还有 0.5rem（8 像素）垫底，
+              不至于让"训练/历史/统计/设置"四个字被手势条压住一半
+          以前这里写的是 pb-[env(safe-area-inset-bottom)]，没有兜底值 ——
+          在报 0 的安卓机上就是一排字贴着屏幕最底边。 */}
+      <nav className="sticky bottom-0 border-t border-line bg-bg pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto flex w-full max-w-[480px]">
           {TABS.map((item) => {
             const isActive = item.key === tab

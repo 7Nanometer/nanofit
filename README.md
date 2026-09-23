@@ -100,6 +100,82 @@ npm run preview  # 本地预览打包后的效果
 
 ---
 
+## 📱 安卓 App（Capacitor 套壳）
+
+网页版之外还套了一个安卓壳 —— 壳里跑的是**同一份代码**，所以功能完全一样，不是两个项目。
+
+```bash
+npm run build          # 先打包网页
+npx cap sync android   # 再把网页产物和插件同步进安卓工程
+```
+
+改完代码要更新到安卓，就是这两句。**注意 `npm run dev` 不会影响安卓** —— 它动的是开发服务器，安卓读的是 `dist/`。
+
+### 打包成 APK 需要先装两样东西
+
+本机目前**两个都没有**：
+
+- **Java 21** —— 不是随便哪个版本都行。依据：`android/app/capacitor.build.gradle` 里写死了 `sourceCompatibility JavaVersion.VERSION_21`
+- **安卓 SDK**
+
+最省事的是装 [Android Studio](https://developer.android.com/studio)（约 1.5 GB），一次把这两样都装好，还带图形界面能点。
+
+### 安卓端和网页版不一样的地方
+
+| 地方 | 网页版 | 安卓端 |
+|---|---|---|
+| 数据存哪 | 浏览器 localStorage | 原生 SharedPreferences（`/data/data/<包名>/shared_prefs/`） |
+| 屏幕常亮 | 浏览器 Wake Lock（**必须 https 才生效**） | 原生 KeepAwake 插件 |
+| 震动 | `navigator.vibrate`（iPhone 不支持） | 原生 Haptics 插件，力度可调 |
+| 地址栏／状态栏颜色 | `theme-color` 那个 meta | `@capacitor/status-bar` 插件 |
+| 物理返回键 | 没有这个概念 | 分层返回（见下） |
+| Service Worker | **要**，离线能力全靠它 | **不要**，见下 |
+
+分流全靠 `Capacitor.isNativePlatform()`。**浏览器里它永远是 false**，所以网页版走的还是老路，一点没变。
+
+### 物理返回键（返回栈）
+
+`src/lib/backbutton.ts` 是个很小的"返回栈"。按返回键时，从**最后登记的**往前问：
+
+1. 在「设置」的子页面（动作库／模板／身体数据）→ 退回设置列表
+2. 训练进行中 → 弹窗确认（记录其实已经存好了，只是别让人手滑退出去吓一跳）
+3. 不在训练页 → 切回训练页
+4. 已经在训练页 → 退出 App
+
+> ⚠️ **改的时候注意**：`App.tsx` 里那个监听**必须只挂一次**（依赖数组留空），当前在哪个 tab 用 ref 现读。
+> 如果改成依赖 `[tab]`，每次切 tab 都会重新挂监听，而返回栈的规矩是**后登记的优先** ——
+> App 的处理器会爬到设置页上面，结果在身体数据页按返回时会直接跳到训练页，把设置列表那层跳过去。
+
+### 为什么原生壳里不要 Service Worker
+
+Service Worker 的拿手好戏是"断网也能打开"，靠的是把文件存进浏览器缓存。
+但安卓 App 的网页文件本来就打包在 App 内部，**断网照样能打开**，离线是白送的。
+
+而它在原生壳里反而会帮倒忙：
+
+- 它是"缓存优先"的 —— 你改了代码重新打包安装，它还把旧文件端出来，
+  结果就是"我明明重装了 App，界面还是老样子"，这种问题极难查
+- 原生壳里的缓存和网页版的互不相干，多这一层只是多一个出错的地方
+
+所以原生壳里直接跳过注册。**网页版的注册一个字没动** —— GitHub Pages 上的离线能力照旧。
+
+### 安卓图标怎么改
+
+源图只有一个：`public/favicon.svg`。改完之后跑两步：
+
+```bash
+node gen-android-icons.mjs   # 生成 5 张源图到 assets/
+npx capacitor-assets generate --android \
+  --iconBackgroundColor '#121212' --iconBackgroundColorDark '#121212' \
+  --splashBackgroundColor '#121212' --splashBackgroundColorDark '#121212'
+```
+
+> ⚠️ **前景层不能随便放大**。安卓自适应图标的"安全区"是画布正中间的一个**圆**，
+> 所以判断标准跟"图形有多宽"**无关**，要看**离中心最远的那个笔画有多远**（要 ≤ 50%）。
+> 完整推导写在 `gen-android-icons.mjs` 里 `FOREGROUND_SCALE` 那个常量的注释里 —— 改之前先读它。
+
+---
+
 ## 🔧 出问题了怎么办（急救三步）
 
 ### 1. 界面看着不对，或者"我改了代码但打开还是老样子"

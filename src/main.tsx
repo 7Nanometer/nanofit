@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { Capacitor } from '@capacitor/core'
 import './index.css'
 import App from './App.tsx'
 import { initStorage } from './lib/storage'
@@ -33,7 +34,24 @@ void initStorage().finally(() => {
 // 白白浪费半天去找"为什么改了没用"。这种坑很多人踩过。
 //
 // import.meta.env.PROD：正式打包时是 true，开发时是 false。
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+//
+// 【为什么安卓原生壳里也跳过它（2026-09-23 加的）】
+// Service Worker 的拿手好戏是"断网也能打开"，靠的是把文件存进浏览器缓存。
+// 但在安卓 App 里，网页文件本来就打包在 App 内部，断网照样能打开 ——
+// 离线能力是白送的，不需要它。
+//
+// 而它在原生壳里反而会帮倒忙：
+//   · 它是"缓存优先"的 —— 你改了代码重新打包安装，它还把旧文件端出来，
+//     结果就是"我明明重装了 App，界面还是老样子"，这种问题极难查
+//   · 原生壳里的缓存和网页版互不相干，多这一层只是多一个出错的地方
+//
+// ★注意：网页版的注册一个字没动 —— GitHub Pages 上的离线能力照旧，
+//   那是整个 App 最要紧的特性之一，绝不能顺手删掉。
+if (
+  !Capacitor.isNativePlatform() &&
+  'serviceWorker' in navigator &&
+  import.meta.env.PROD
+) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {
       // 注册失败不影响 App 正常使用（只是没有离线功能），忽略即可

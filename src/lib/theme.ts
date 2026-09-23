@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+import { StatusBar, Style } from '@capacitor/status-bar'
 import type { Theme } from '../types'
 
 // 顺手再导出一次，这样用的人既可以 from '../types' 拿，
@@ -58,6 +60,28 @@ export function applyTheme(theme: Theme): void {
       'content',
       theme === 'light' ? 'default' : 'black-translucent',
     )
+  }
+
+  // ---------- 安卓原生壳专用：状态栏上的图标和时间用什么颜色 ----------
+  //
+  // 【★这里有个反直觉的坑，改的时候千万别想当然】
+  // Capacitor 这个枚举的名字指的是**背景**，不是字。
+  // 我去读了它的类型定义文件（node_modules/@capacitor/status-bar/.../definitions.d.ts）：
+  //     Style.Dark  = "Light text for dark backgrounds"   → 深色背景配浅色字
+  //     Style.Light = "Dark text for light backgrounds"   → 浅色背景配深色字
+  // 也就是说：
+  //     夜间模式（深色底）→ 要用浅色字 → 传 Style.Dark
+  //     日间模式（白底）  → 要用深色字 → 传 Style.Light
+  // 名字和你要的效果正好相反。传反了，日间模式下状态栏就是黑字压白底还能看、
+  // 夜间模式下变成黑字压深底 —— 直接看不见时间和电量。
+  //
+  // 在浏览器里打开时这段不会执行（Capacitor.isNativePlatform() 是 false）。
+  if (Capacitor.isNativePlatform()) {
+    void StatusBar.setStyle({
+      style: theme === 'light' ? Style.Light : Style.Dark,
+    }).catch(() => {
+      // 设置失败无所谓，最多是状态栏颜色不跟手，不影响任何功能
+    })
   }
 }
 

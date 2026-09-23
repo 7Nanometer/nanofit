@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   Exercise,
   PlannedItem,
@@ -8,6 +8,7 @@ import type {
   WorkoutSession,
 } from '../types'
 import { mergeExercises } from '../data/exercises'
+import { registerBackHandler } from '../lib/backbutton'
 import { newId } from '../lib/id'
 import { formatDateCN, todayKey } from '../lib/date'
 import { sessionVolume, textToNumber } from '../lib/calc'
@@ -67,6 +68,27 @@ export function TrainScreen() {
   // 小提醒：真正创建训练记录时用的是实时的 todayKey()（见下面的 addExercise），
   // 所以哪怕你开着这一页跨过了午夜，记录下来的日期依然是准的。
   const [today] = useState(todayKey)
+
+  // ---------- 安卓的物理返回键 ----------
+  // 这次训练还没结束的时候按返回，先问一句再走。
+  // 为什么不是直接不许退：记录其实**已经存好了**（每点一次 ✓ 就存一次），
+  // 退出 App 并不会丢数据，下次打开还能接着练。所以拦的目的是
+  // "别让人手一滑就莫名其妙退出去、吓一跳"，而不是"防丢数据"。
+  // 弹窗里也把这句话写清楚了，免得人以为退了就白练了。
+  //
+  // 没有进行中的训练（session 是 null）时不拦截 —— 那时按返回直接退出，
+  // 是符合安卓习惯的，不用多问一句。
+  useEffect(() => {
+    if (session === null) return
+    return registerBackHandler(() => {
+      const wantsToQuit = window.confirm(
+        '这次训练还在进行中。\n\n记录已经存好了，下次打开还能接着练。\n\n确定要退出 App 吗？',
+      )
+      // 点"取消" → 返回 true：这事我接了，什么都不做，留在训练页
+      // 点"确定" → 返回 false：交回给默认逻辑（在训练页按返回 = 退出 App）
+      return !wantsToQuit
+    })
+  }, [session])
 
   // 预置 + 自建，合成一个总列表，用来查出动作的中文名
   const allExercises = mergeExercises(customExercises)

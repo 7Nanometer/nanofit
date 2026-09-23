@@ -78,3 +78,31 @@ BMI = 体重kg ÷ 身高m²
   女 = 1.2×BMI + 0.23×年龄 - 5.4
   ★ 它算的是"这种身高体重年龄性别的人平均多少"，不是测量值。
     误差 ±4～5 个百分点，肌肉多的人会被算高。界面上必须标"估算"。
+
+## 安卓打包（2026-09-23 加的）
+
+Capacitor 套壳。**网页版和安卓端共用同一份 src/ 代码**，靠 `Capacitor.isNativePlatform()` 分流。
+铁律"纯前端"依然成立 —— 壳里跑的还是一个纯前端网页，没有任何后端。
+
+- appId `com.nanometer7.nanofit.app`（主人拍板，上架后一辈子不能改）
+- appName `NanoFIT`，webDir `dist`
+- 5 个插件：preferences、haptics、app、status-bar、keep-awake（社区版）。
+  都只在原生端生效
+- 存储：网页端仍是 localStorage、安卓端走 preferences。
+  **内存快照**的设计和理由见 src/lib/storage.ts 顶部那段（改存储前必须读）
+- 桌面图标链路：public/favicon.svg → gen-android-icons.mjs → assets/ → @capacitor/assets
+- 物理返回键：src/lib/backbutton.ts 的返回栈
+
+改完代码同步到安卓：`npm run build && npx cap sync android`
+打包 APK 需要 Java 21 + 安卓 SDK，本机目前没有。详见 README 的「安卓 App」一节。
+
+### 这些坑别再踩（都是踩过的）
+
+- App.tsx 里返回键的监听**必须只挂一次**，当前 tab 用 ref 读。
+  改成依赖 [tab] 会让 App 的处理器爬到设置页上面，子页面按返回会跳过设置列表
+- 原生壳里**不要**注册 Service Worker（否则"重装了 App 界面还是老的"），
+  但网页版的注册一个字都不能动
+- 安卓自适应图标的前景层，安全区是个**圆**，判断标准是"离中心最远的笔画 ≤ 50%"，
+  不是"图形有多宽"。推导在 gen-android-icons.mjs 里
+- `@capacitor/status-bar` 的 Style 枚举名字指的是**背景**不是字：
+  夜间模式（深底）传 `Style.Dark`、日间模式（白底）传 `Style.Light`。传反了状态栏看不见

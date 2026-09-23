@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core'
+import { Haptics } from '@capacitor/haptics'
+
 // ============================================================
 // 休息结束时"叮"一声 + 震一下
 // ============================================================
@@ -12,10 +15,17 @@
 //   1. 用户点 ✓ 记一组时 —— 那正好是一次点击 —— 顺手把音响"解锁"
 //   2. 90 秒后要响的时候，音响已经解锁过了，就能正常响
 //
-// 【震动只有安卓有】
-// iPhone 从来不支持网页震动，这是苹果不给，不是代码写错了。
-// 所以下面写的是"能震就震，不能震就算了"。
+// 【震动分两条路（2026-09-23 改的）】
+//   网页版：用浏览器的 navigator.vibrate。
+//           iPhone 从来不支持网页震动（苹果不给，不是代码写错），
+//           所以写的是"能震就震，不能震就算了"。
+//   安卓版：用 Capacitor 的原生震动插件 —— 这是真·原生震动，
+//           不受"必须用户点击才能震"那条网页规矩限制，力度也能调。
+//           健身房里手机可能在包里、环境也吵，震动比声音更容易注意到。
 // ============================================================
+
+// 现在是不是跑在安卓的原生壳里（在浏览器里打开时是 false）
+const isNative = Capacitor.isNativePlatform()
 
 // 全局只保留一个"音响"。第一次用到时才创建。
 let audioContext: AudioContext | null = null
@@ -122,8 +132,13 @@ export function beep(): void {
   playBeeps(ctx)
 }
 
-// 震一下：震 200 毫秒、停 100 毫秒、再震 200 毫秒
+// 震一下
 export function vibrate(): void {
+  if (isNative) {
+    vibrateNative()
+    return
+  }
+
   try {
     // 先检查这个功能存不存在。iPhone 上没有，直接调用会报错。
     if (typeof navigator.vibrate === 'function') {
@@ -135,4 +150,19 @@ export function vibrate(): void {
   } catch {
     // 某些环境下调用它会直接抛错，这里兜住，别让它连累后面的代码
   }
+}
+
+// 安卓端的原生震动
+function vibrateNative(): void {
+  // 【为什么震两下、每下还比较长】
+  // 健身房里手机常常在包里，环境也吵，单次短震很容易被忽略。
+  // 两下各 400 毫秒、中间隔 250 毫秒，是一个很好认的节奏 ——
+  // 和微信来消息那种"嗡"一下就完的震动能区分开。
+  //
+  // 失败也无所谓（有的手机被设成静音就完全不震），所以直接吞掉错误，
+  // 绝不能让震动的问题连累到"休息结束"这件正事。
+  void Haptics.vibrate({ duration: 400 }).catch(() => {})
+  setTimeout(() => {
+    void Haptics.vibrate({ duration: 400 }).catch(() => {})
+  }, 650)
 }

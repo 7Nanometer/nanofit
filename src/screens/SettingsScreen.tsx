@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { Settings, Theme } from '../types'
+import { registerBackHandler } from '../lib/backbutton'
 import { downloadBackup, importBackup } from '../lib/json'
 import { readSettings, writeSettings } from '../lib/storage'
 import { applyTheme } from '../lib/theme'
@@ -88,6 +89,19 @@ export function SettingsScreen() {
       setImportMessage(result.message)
     }
   }
+
+  // ---------- 安卓的物理返回键 ----------
+  // 在子页面（动作库 / 训练模板 / 身体数据）里按返回，先退回设置列表，
+  // 而不是整个 App 退出去 —— 不然填到一半数据、手一滑 App 就没了。
+  // 回到列表页（sub === 'list'）就把这个处理函数注销掉，
+  // 让返回键交回给上一层逻辑（App.tsx 那边决定切页还是退出）。
+  useEffect(() => {
+    if (sub === 'list') return
+    return registerBackHandler(() => {
+      setSub('list')
+      return true // 告诉上层：这次返回我处理了，别退出 App
+    })
+  }, [sub])
 
   // 如果当前在动作库里，就整个换成动作库页面。
   // 点"返回"时把它设回 'list'，就回到设置列表了。
