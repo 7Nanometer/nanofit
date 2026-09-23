@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { beep, vibrate } from '../lib/beep'
+import { setKeepAwake } from '../lib/wakelock'
 
 // ============================================================
 // 组间休息倒计时
@@ -41,20 +42,37 @@ export function RestTimer({ endsAt, onClose }: Props) {
     // setInterval 在这里只当"刷新闹钟"用。它被降频也不影响算出来的数字。
     const timer = setInterval(tick, 250)
 
-    // 从后台切回前台时，立刻补算一次
-    function onVisible() {
-      if (!document.hidden) tick()
+    // 从后台切回前台时，立刻补算一次。
+    //
+    // 【为什么这里不判断"页面是否隐藏"】
+    // 有些浏览器触发这个事件时，"页面是否隐藏"这个标记还没更新完，
+    // 判断它反而会把本该执行的补算挡在门外 —— 那正是"切回来还在倒数"的原因。
+    // 而 tick() 本身是安全的（它只是照着结束时间重算一遍），多调用几次没有副作用。
+    function onReturn() {
+      tick()
     }
-    document.addEventListener('visibilitychange', onVisible)
+    document.addEventListener('visibilitychange', onReturn)
+    // focus 是另一条"你回来了"的信号。
+    // 不同浏览器对这两件事的触发时机不一样，两个都听，谁先到算谁的。
+    window.addEventListener('focus', onReturn)
 
     return () => {
       // ★这两句必须有，别忘了！
       // 如果不清掉，每重画一次就多一个定时器，
       // 界面上会看到数字一秒跳好几下 —— 看着像计时器坏了，其实是没清理。
       clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
+      document.removeEventListener('visibilitychange', onReturn)
+      window.removeEventListener('focus', onReturn)
     }
   }, [endsAt])
+
+  // 休息期间让手机屏幕别自动熄灭。
+  // 【注意】这个功能浏览器要求 https 才能用 —— 你现在手机上连的是局域网 http 地址，
+  // 所以暂时不生效；等阶段 6 部署到 https 之后它就会自动开始工作。
+  useEffect(() => {
+    setKeepAwake(true)
+    return () => setKeepAwake(false)
+  }, [])
 
   const finished = remain <= 0
 
@@ -90,6 +108,9 @@ export function RestTimer({ endsAt, onClose }: Props) {
         {/* tabular-nums 让每个数字宽度一样，倒数时不会左右抖动 */}
         <div className="text-2xl font-bold tabular-nums text-ink">
           {formatSec(remain)}
+        </div>
+        <div className="mt-1 text-xs text-muted">
+          别切到别的 App —— 切走了手机就不会提醒你（浏览器的限制）
         </div>
       </div>
       <button

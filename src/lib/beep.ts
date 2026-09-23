@@ -58,16 +58,9 @@ export function unlockAudio(): void {
   }
 }
 
-// 响三声"叮"
-export function beep(): void {
-  const ctx = getContext()
-  if (ctx === null) return
-
+// 真正发声的部分。假定音响此刻已经准备好（没被挂起）。
+function playBeeps(ctx: AudioContext): void {
   try {
-    if (ctx.state === 'suspended') {
-      void ctx.resume()
-    }
-
     for (let i = 0; i < 3; i++) {
       // 每声之间隔 0.25 秒
       const startAt = ctx.currentTime + i * 0.25
@@ -93,10 +86,53 @@ export function beep(): void {
   }
 }
 
+// 响三声"叮"
+export function beep(): void {
+  const ctx = getContext()
+  if (ctx === null) return
+
+  // ==========================================================
+  // 【这里是"从后台切回来不响"这个 bug 的根源，改的时候别改回去】
+  //
+  // 你切到别的 App 时，系统会把音响（AudioContext）**挂起**省电。
+  // 切回来时要先"唤醒"它，而唤醒（resume）是一个**异步**操作 ——
+  // 它要过一会儿才真的醒过来。
+  //
+  // 原来的写法是：叫一声"快醒醒"，然后**不等它回答**就直接放声音。
+  // 结果声音是在它还没醒的时候放出去的，被系统丢掉了 —— 你就什么也没听到。
+  //
+  // 正确的写法：等它答应（resume 成功后）再放。
+  // 另外还留了一手保底：万一它磨蹭超过 250 毫秒还不答应，
+  // 也硬着头皮放一次（总比完全没声音强）。
+  // ==========================================================
+  if (ctx.state === 'suspended') {
+    let alreadyPlayed = false
+    const play = () => {
+      if (alreadyPlayed) return // 防止上面两条路都走通、放两遍
+      alreadyPlayed = true
+      playBeeps(ctx)
+    }
+
+    void ctx.resume().then(play).catch(play) // 正常情况：等它醒了再放
+    setTimeout(play, 250) // 保底：它要是卡住了，也别死等
+    return
+  }
+
+  // 音响本来就是醒着的，直接放
+  playBeeps(ctx)
+}
+
 // 震一下：震 200 毫秒、停 100 毫秒、再震 200 毫秒
 export function vibrate(): void {
-  // 先检查这个功能存不存在。iPhone 上没有，直接调用会报错。
-  if (typeof navigator.vibrate === 'function') {
-    navigator.vibrate([200, 100, 200])
+  try {
+    // 先检查这个功能存不存在。iPhone 上没有，直接调用会报错。
+    if (typeof navigator.vibrate === 'function') {
+      // 注意：有些浏览器在"不是用户手指点击"的场合会拒绝震动请求
+      // （直接返回 false，不报错也不震）。这个绕不过去，只能尽力而为。
+      // 所以声音才是主要提醒手段，震动算锦上添花。
+      navigator.vibrate([200, 100, 200])
+    }
+  } catch {
+    // 某些环境下调用它会直接抛错，这里兜住，别让它连累后面的代码
   }
 }
