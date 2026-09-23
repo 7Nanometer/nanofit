@@ -111,14 +111,83 @@ npx cap sync android   # 再把网页产物和插件同步进安卓工程
 
 改完代码要更新到安卓，就是这两句。**注意 `npm run dev` 不会影响安卓** —— 它动的是开发服务器，安卓读的是 `dist/`。
 
-### 打包成 APK 需要先装两样东西
+### 怎么打包 APK
 
-本机目前**两个都没有**：
+环境已经配好了（2026-09-23）。打包就一句话：
 
-- **Java 21** —— 不是随便哪个版本都行。依据：`android/app/capacitor.build.gradle` 里写死了 `sourceCompatibility JavaVersion.VERSION_21`
-- **安卓 SDK**
+```bash
+cd android
+./gradlew assembleDebug
+```
 
-最省事的是装 [Android Studio](https://developer.android.com/studio)（约 1.5 GB），一次把这两样都装好，还带图形界面能点。
+产物在 `android/app/build/outputs/apk/debug/app-debug.apk`，大约 4.7 MB。
+第一次跑要 2 分钟左右，之后改代码再打会快很多。
+
+> ⚠️ **debug 版只能自己装着玩，不能上架** —— 它带 `debug` 标记、用的是临时签名。
+
+#### 打这个包踩过的三个坑（换电脑或换项目位置时会再遇到）
+
+**1. Java 必须用 21 左右，不能用 Android Studio 自带的那个**
+
+Android Studio 自带的 JBR 是 **Java 25**，而打包工具 Gradle 8.14.3 只认到 Java 24，
+会报这个错：
+
+```
+Unsupported class file major version 69
+```
+
+（69 就是 Java 25 的类文件版本号。）
+
+解决：单独装了 Microsoft OpenJDK 21，并在**用户目录**的
+`C:\Users\Administrator\.gradle\gradle.properties` 里指定：
+
+```
+org.gradle.java.home=C:/Program Files/Microsoft/jdk-21.0.12.101-hotspot
+```
+
+注意那个文件**不属于本仓库** —— 它是"这台电脑"的配置，不会跟着项目走。
+
+**2. 项目路径不能有中文**
+
+本项目在 `E:\Vibe Coding\Nanofit\Nanofit工程`，"工程"两个字会让安卓构建工具
+**直接拒绝干活**（`Your project path contains non-ASCII characters`）。
+
+解决：`android/gradle.properties` 里加了一行跳过这道检查：
+
+```
+android.overridePathCheck=true
+```
+
+> ★ **如果以后打包报出莫名其妙的错，第一个就怀疑这里。**
+> 实在不行就把整个项目挪到纯英文路径（比如 `E:\nanofit`）再试。
+
+**3. Gradle 第一次下载自己要挂代理**
+
+它的下载地址会重定向到 **GitHub**（`release-assets.githubusercontent.com`），
+国内直连必然超时。第一次跑的时候加代理即可：
+
+```bash
+GRADLE_OPTS="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7897" ./gradlew assembleDebug
+```
+
+**只影响第一次** —— Gradle 下完之后缓存在本机了。之后下安卓依赖库
+（dl.google.com、Maven Central）都直连能下，不需要代理。
+
+### 以后要上架，怎么打 release 版
+
+release 版要做三件事，**现在不用管**，到时候我带你做：
+
+1. **生成签名密钥**（App 的"公章"，一辈子就这一个，**丢了就再也无法更新这个 App**）：
+   ```bash
+   keytool -genkey -v -keystore nanofit-release.jks -alias nanofit \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+   ⚠️ 生成后**立刻备份到网盘和微信收藏，并记住密码**。
+   `.jks` 后缀已经在 `.gitignore` 里，不会被提交进仓库（泄露了别人就能冒充你发更新）。
+2. **在 `android/app/build.gradle` 里配置签名**（告诉它用哪个密钥、密码是什么）
+3. **打包**：
+   - 上架 Google Play → `./gradlew bundleRelease`（产出 `.aab` 格式，商店要这个）
+   - 自己分发 → `./gradlew assembleRelease`（产出 `.apk`）
 
 ### 安卓端和网页版不一样的地方
 

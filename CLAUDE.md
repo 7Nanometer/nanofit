@@ -94,7 +94,25 @@ Capacitor 套壳。**网页版和安卓端共用同一份 src/ 代码**，靠 `C
 - 物理返回键：src/lib/backbutton.ts 的返回栈
 
 改完代码同步到安卓：`npm run build && npx cap sync android`
-打包 APK 需要 Java 21 + 安卓 SDK，本机目前没有。详见 README 的「安卓 App」一节。
+打包 APK：`cd android && ./gradlew assembleDebug`
+详见 README 的「安卓 App」一节。
+
+### 打包环境（2026-09-23 装好并验证过）
+
+- **Android Studio**：`C:\Program Files\Android\Android Studio`（自带 JBR **25**）
+- **安卓 SDK**：`C:\Users\Administrator\AppData\Local\Android\Sdk`
+  （platforms 有 android-36 / android-37.0，build-tools 35.0.0 / 36.0.0）
+- **★ 但打包不用它自带的 Java 25**：Gradle 8.14.3 只认到 Java 24，
+  用 25 会报 `Unsupported class file major version 69`。
+  所以另装了 **Microsoft OpenJDK 21**（`C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot`），
+  并在**用户级**配置 `C:\Users\Administrator\.gradle\gradle.properties` 里写
+  `org.gradle.java.home=...` 指向它。那个文件不属于仓库。
+- **项目路径含中文**（`Nanofit工程`）会让安卓构建工具直接拒绝干活，
+  已在 `android/gradle.properties` 加 `android.overridePathCheck=true` 跳过。
+  ★ 以后打包报奇怪的错，第一个怀疑这里。
+- `android/local.properties` 里是 SDK 路径（已 gitignore，不进仓库）。
+- Gradle 第一次下载会超时（重定向到 GitHub），要挂代理：
+  `GRADLE_OPTS="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7897"`。只影响第一次。
 
 ### 这些坑别再踩（都是踩过的）
 
