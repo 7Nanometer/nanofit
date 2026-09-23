@@ -1,5 +1,10 @@
-// 用一次性的小脚本把 favicon.svg 转成各种尺寸的 PNG。
-// 生成完这个脚本就删掉，它不会留在项目里。
+// 把 public/favicon.svg 转成各种尺寸的 PNG 图标。
+//
+// 【什么时候要跑它】改了 favicon.svg 之后（不然手机上还是旧图标）。
+// 具体命令见 README 的「图标怎么改」一节。
+//
+// 【注意】XML 注释里不能出现连续两个减号，所以 README 里那条
+// npm install 带参数的写法，在这个文件里也不能原样抄进 svg 的注释。
 import sharp from 'sharp'
 import { readFileSync, mkdirSync } from 'node:fs'
 
