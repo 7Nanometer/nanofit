@@ -187,3 +187,83 @@ export function usedExerciseIds(sessions: WorkoutSession[]): string[] {
   }
   return [...ids]
 }
+
+// ---------- 折线图 / 柱状图的纵轴刻度 ----------
+//
+// 【为什么需要这个函数】
+// 不给刻度时，画图库（recharts）自己算出来的间隔会是这种：
+//     体脂 20.15 / 19.5 / 18.85 / 18.2 / 17.55   ← 间隔 0.65
+//     体重 75.6 / 74.7 / 73.8 / 72.9 / 72         ← 间隔 0.9
+// 数本身没错，但一眼读不出"大概多少"，得在脑子里做除法。
+//
+// 【这个函数怎么做的】
+// 一个很经典的算法，三步：
+//   1. 先把范围除以份数，得到一个"大概的间隔"（比如 0.9）
+//   2. 把这个间隔往上取到最近的"好看数"——1、2、5、10、20、50…
+//      （0.9 会变成 1，0.65 会变成 1，13 会变成 20）
+//   3. 用这个好看的间隔去铺刻度，并让上下两端都落在整倍数上
+// 结果是：不管数据是什么范围，刻度都是 1、2、5 这类整数的倍数。
+//
+// 【什么是"整数的倍数"】
+// 大部分情况下就是整数（17、18、19、20）。
+// 数据范围特别小的时候（比如身高一直记 176，上下只差 1 厘米），
+// 间隔会落到 0.5 —— 这时如果硬用整数，整个轴只剩两三条刻度，
+// 反而看不出变化。0.5 也是"好看数"，照样一眼能读。
+
+// 希望纵轴上大约出现几条刻度。
+// 太少（3 条）读不出中间的细节，太多（8 条以上）字会挤成一团。
+// 只有这一处能调，不要在各个调用点各写各的 —— 那样早晚会打架。
+const TICK_COUNT = 5
+export function niceAxis(
+  values: number[],
+  includeZero = false,
+): { domain: [number, number]; ticks: number[] } {
+  // 一个数都没有：给个安全的最小范围，免得后面除以 0
+  if (values.length === 0) return { domain: [0, 1], ticks: [0, 1] }
+
+  let min = Math.min(...values)
+  let max = Math.max(...values)
+
+  // 容量这类"从 0 起才有意义"的指标要含 0。
+  // 放在这里处理最省事：min 变成 0 之后，第一步算出的起点自然就是 0。
+  if (includeZero) min = Math.min(min, 0)
+
+  // 所有值都一样（例如身高一直记 176）：硬撑开一个范围，
+  // 否则这条线会贴着边缘，看不出它其实是平的。
+  if (min === max) {
+    min -= 1
+    max += 1
+  }
+
+  const roughStep = (max - min) / TICK_COUNT
+  // magnitude 是"数量级"：0.9 的数量级是 0.1，13 的数量级是 10
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)))
+  const normalized = roughStep / magnitude
+  // 往上取到最近的 1、2、5、10 之一
+  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+  let step = magnitude * factor
+
+  // 【优先用整数间隔】
+  // 主人要的是"整数刻度"。上面那套算法偶尔会选出 0.5 这种间隔
+  // （体脂 17.9～20 那条本来会被切成 0.5 一格）。
+  // 只要数据范围够宽（≥2），就换成 1 —— 那条照样有 17/18/19/20 四条刻度，
+  // 读起来反而更顺。
+  // 只有范围窄到 2 以内，整条轴会只剩两三条刻度、看不出变化，才保留小数间隔。
+  if (step < 1 && max - min >= 2) step = 1
+
+  const start = Math.floor(min / step) * step
+  const end = Math.ceil(max / step) * step
+
+  const ticks: number[] = []
+  for (let i = 0; ; i++) {
+    const value = start + i * step
+    if (value > end + step / 1000) break
+    // toFixed(6) → Number 是为了消掉小数运算的浮点误差：
+    // 不加这一步会冒出 176.00000000000003 这种刻度。
+    ticks.push(Number(value.toFixed(6)))
+    // 保险：万一 step 小得离谱，别把内存撑爆
+    if (ticks.length > 30) break
+  }
+
+  return { domain: [Number(start.toFixed(6)), Number(end.toFixed(6))], ticks }
+}

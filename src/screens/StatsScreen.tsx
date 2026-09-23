@@ -22,6 +22,7 @@ import {
   exerciseSeries,
   lastSessionDate,
   lastSessionVolume,
+  niceAxis,
   thisWeekCount,
   thisWeekVolume,
   usedExerciseIds,
@@ -108,6 +109,13 @@ export function StatsScreen() {
   const points = selectedId === '' ? [] : exerciseSeries(sessions, selectedId)
   const body = bodySeries(bodyMetrics)
 
+  // 柱状图的纵轴刻度。第二个参数 true = 一定要含 0 ——
+  // 柱状图里"柱子的高度"直接表示大小，不從 0 起的话比例是骗人的。
+  const weeksAxis = niceAxis(
+    weeks.map((w) => w.volume),
+    true,
+  )
+
   const selectedName =
     usedExercises.find((e) => e.id === selectedId)?.name ?? ''
 
@@ -176,6 +184,8 @@ export function StatsScreen() {
               tickLine={false}
               axisLine={false}
               tickFormatter={formatAxis}
+              domain={weeksAxis.domain}
+              ticks={weeksAxis.ticks}
               width={52}
             />
             <Tooltip
@@ -310,6 +320,12 @@ function ProgressChart({
   startFromZero?: boolean
 }) {
   const [C] = useState(chartColors)
+  // 纵轴刻度：容量那种"从 0 起才有意义"的传 startFromZero=true，
+  // 重量和 1RM 不传，让轴贴着数据走（80 涨到 85 这种进步才看得出来）
+  const axis = niceAxis(
+    points.map((p) => p[dataKey]),
+    startFromZero,
+  )
 
   return (
     <ChartCard
@@ -343,7 +359,8 @@ function ProgressChart({
             tickLine={false}
             axisLine={false}
             tickFormatter={formatAxis}
-            domain={startFromZero ? [0, 'auto'] : ['auto', 'auto']}
+            domain={axis.domain}
+            ticks={axis.ticks}
             width={52}
           />
           <Tooltip
@@ -389,6 +406,10 @@ function BodyTrendChart({
     .filter((b) => b[dataKey] !== undefined)
     .map((b) => ({ label: b.label, value: b[dataKey] as number }))
 
+  // 纵轴刻度。体重、体脂、身高都不含 0 —— 从 0 起的话，
+  // 72 到 75 公斤这条线会被压成贴着顶边的一条直线，变化全看不出来。
+  const axis = niceAxis(points.map((p) => p.value))
+
   return (
     <ChartCard
       title={title}
@@ -423,7 +444,8 @@ function BodyTrendChart({
             fontSize={11}
             tickLine={false}
             axisLine={false}
-            domain={['auto', 'auto']}
+            domain={axis.domain}
+            ticks={axis.ticks}
             width={52}
           />
           <Tooltip
