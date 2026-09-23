@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { Settings } from '../types'
 import { readSettings, writeSettings } from '../lib/storage'
+import { BodyScreen } from './BodyScreen'
 import { LibraryScreen } from './LibraryScreen'
+import { TemplateScreen } from './TemplateScreen'
 
 // ============================================================
 // "设置"页 —— 按你的决定，这里当工具箱用
@@ -15,7 +17,7 @@ import { LibraryScreen } from './LibraryScreen'
 
 // 记住当前显示的是"设置列表"还是某个子页面。
 // 这是"不装路由"方案的核心：用一个变量代替网址栏。
-type Sub = 'list' | 'library'
+type Sub = 'list' | 'library' | 'templates' | 'body'
 
 export function SettingsScreen() {
   const [sub, setSub] = useState<Sub>('list')
@@ -35,6 +37,12 @@ export function SettingsScreen() {
   // 点"返回"时把它设回 'list'，就回到设置列表了。
   if (sub === 'library') {
     return <LibraryScreen onBack={() => setSub('list')} />
+  }
+  if (sub === 'templates') {
+    return <TemplateScreen onBack={() => setSub('list')} />
+  }
+  if (sub === 'body') {
+    return <BodyScreen onBack={() => setSub('list')} />
   }
 
   return (
@@ -104,11 +112,15 @@ export function SettingsScreen() {
           </span>
         </button>
 
-        <SettingRow label="训练模板" hint="推日 / 拉日 / 腿日" locked="阶段 4" />
+        <SettingRow
+          label="训练模板"
+          hint="推日 / 拉日 / 腿日，一键套用"
+          onClick={() => setSub('templates')}
+        />
         <SettingRow
           label="身体数据"
           hint="身高、体重、体脂"
-          locked="阶段 4"
+          onClick={() => setSub('body')}
         />
         <SettingRow
           label="导出 / 导入备份"

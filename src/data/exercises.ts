@@ -82,3 +82,12 @@ export const PRESET_EXERCISES: Exercise[] = [
 export function mergeExercises(custom: Exercise[]): Exercise[] {
   return [...PRESET_EXERCISES, ...custom]
 }
+
+// 把动作的 id 翻成中文名，界面上显示用。
+//
+// 【为什么会找不到】
+// 用户把自建动作删掉了，但历史记录里还引用着它。
+// 这时返回一句提示，而不是留一片空白让人以为界面坏了。
+export function exerciseName(all: Exercise[], id: string): string {
+  return all.find((e) => e.id === id)?.name ?? '（已删除的动作）'
+}

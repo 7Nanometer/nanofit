@@ -14,7 +14,13 @@
 // ============================================================
 
 import { DEFAULT_SETTINGS } from '../types'
-import type { Exercise, Settings, WorkoutSession } from '../types'
+import type {
+  BodyMetric,
+  Exercise,
+  Settings,
+  Template,
+  WorkoutSession,
+} from '../types'
 
 // ---------- 储物柜的格子名 ----------
 //
@@ -119,4 +125,38 @@ export function readSessions(): WorkoutSession[] {
 
 export function writeSessions(list: WorkoutSession[]): boolean {
   return write(KEYS.sessions, list)
+}
+
+// ---------- 训练模板 ----------
+// 这里存的是"你自己建的"模板。3 个预置模板写在代码里（src/data/templates.ts），不进这里。
+
+export function readTemplates(): Template[] {
+  return read<Template[]>(KEYS.templates, [])
+}
+
+export function writeTemplates(list: Template[]): boolean {
+  return write(KEYS.templates, list)
+}
+
+// ---------- 身体数据（身高 / 体重 / 体脂）----------
+
+export function readBodyMetrics(): BodyMetric[] {
+  return read<BodyMetric[]>(KEYS.bodyMetrics, [])
+}
+
+export function writeBodyMetrics(list: BodyMetric[]): boolean {
+  return write(KEYS.bodyMetrics, list)
+}
+
+// 按日期写入。同一天已经有记录就**覆盖**那一条，而不是新增一条。
+//
+// 【为什么同一天只留一条】
+// 早上称一次、晚上称一次，应该以最新的为准。
+// 如果两条都留着，趋势图上会出现两个点挤在同一天，看着很乱。
+export function upsertBodyMetric(metric: BodyMetric): boolean {
+  const others = readBodyMetrics().filter((m) => m.date !== metric.date)
+  // localeCompare 是按文字排序。日期是 '2026-09-23' 这种格式，
+  // 按文字排序的结果正好等于按时间排序（因为年份在最前面）。
+  const next = [...others, metric].sort((a, b) => a.date.localeCompare(b.date))
+  return write(KEYS.bodyMetrics, next)
 }

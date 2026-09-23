@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import type { Exercise, SetEntry, Settings, WorkoutSession } from '../types'
+import type {
+  Exercise,
+  PlannedItem,
+  SetEntry,
+  Settings,
+  Template,
+  WorkoutSession,
+} from '../types'
 import { mergeExercises } from '../data/exercises'
 import { newId } from '../lib/id'
 import { formatDateCN, todayKey } from '../lib/date'
@@ -11,12 +18,14 @@ import {
   readCustomExercises,
   readSessions,
   readSettings,
+  readTemplates,
   writeActiveWorkout,
   writeSessions,
 } from '../lib/storage'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { RestTimer } from '../components/RestTimer'
 import { SetRow } from '../components/SetRow'
+import { TemplatePicker } from '../components/TemplatePicker'
 
 // ============================================================
 // 训练页 —— 整个 App 最核心的一屏
@@ -40,7 +49,9 @@ export function TrainScreen() {
   )
   const [customExercises] = useState<Exercise[]>(readCustomExercises)
   const [settings] = useState<Settings>(readSettings)
+  const [customTemplates] = useState<Template[]>(readTemplates)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
   const [storageError, setStorageError] = useState(false)
   // 休息倒计时"结束的时间点"。null 表示当前没在休息。
   // 注意存的是"结束时刻"而不是"还剩几秒"，原因见 RestTimer.tsx 的注释。
@@ -88,6 +99,43 @@ export function TrainScreen() {
       ...base,
       exerciseIds: [...(base.exerciseIds ?? []), exerciseId],
       // startedAt 记下"这次训练是什么时候开始的"，只在第一次添加动作时写
+      startedAt: base.startedAt ?? new Date().toISOString(),
+    })
+  }
+
+  // ---------- 套用一个模板 ----------
+  function applyTemplate(template: Template) {
+    const base: WorkoutSession = session ?? {
+      id: newId(),
+      date: todayKey(),
+      entries: [],
+      exerciseIds: [],
+    }
+
+    setTemplatePickerOpen(false)
+
+    // 模板里的动作，已经在今天训练里的就不再重复加
+    const existing = new Set(base.exerciseIds ?? [])
+    const added = template.items
+      .map((item) => item.exerciseId)
+      .filter((id) => !existing.has(id))
+
+    // "目标几组几次"这份计划清单也要合并：
+    // 同一个动作已经有目标就换成新的，没有就追加进去。
+    // （这样连续套用"推日"和"腿日"时，两边的目标都能保留下来）
+    const merged = [...(base.plannedItems ?? [])]
+    for (const item of template.items) {
+      const index = merged.findIndex((m) => m.exerciseId === item.exerciseId)
+      if (index >= 0) merged[index] = item
+      else merged.push(item)
+    }
+
+    persist({
+      ...base,
+      name: template.name,
+      templateId: template.id,
+      plannedItems: merged,
+      exerciseIds: [...(base.exerciseIds ?? []), ...added],
       startedAt: base.startedAt ?? new Date().toISOString(),
     })
   }
@@ -223,12 +271,17 @@ export function TrainScreen() {
       {exerciseIds.map((id) => {
         const exercise = allExercises.find((e) => e.id === id)
         const sets = (session?.entries ?? []).filter((s) => s.exerciseId === id)
+        // 这个动作有没有来自模板的"目标几组几次"
+        const planned = (session?.plannedItems ?? []).find(
+          (p) => p.exerciseId === id,
+        )
         return (
           <ExerciseCard
             key={id}
             name={exercise?.name ?? '（已删除的动作）'}
             equipment={exercise?.equipment ?? ''}
             sets={sets}
+            planned={planned}
             showRpe={settings.rpeEnabled}
             onAddSet={(w, r, rpe) => addSet(id, w, r, rpe)}
             onRemoveSet={removeSet}
@@ -250,11 +303,29 @@ export function TrainScreen() {
           : '+ 添加动作'}
       </button>
 
+      {/* 一键套用模板：自动把一整套动作和目标组数次数填进来 */}
+      <button
+        type="button"
+        onClick={() => setTemplatePickerOpen(true)}
+        className="mt-2 w-full rounded-xl border border-dashed border-line py-4 text-sm text-ink-2"
+      >
+        套用模板（推日 / 拉日 / 腿日）
+      </button>
+
       {pickerOpen && (
         <ExercisePicker
           customExercises={customExercises}
           onPick={addExercise}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {templatePickerOpen && (
+        <TemplatePicker
+          customTemplates={customTemplates}
+          allExercises={allExercises}
+          onPick={applyTemplate}
+          onClose={() => setTemplatePickerOpen(false)}
         />
       )}
     </div>
@@ -269,6 +340,7 @@ function ExerciseCard({
   name,
   equipment,
   sets,
+  planned,
   showRpe,
   onAddSet,
   onRemoveSet,
@@ -277,6 +349,7 @@ function ExerciseCard({
   name: string
   equipment: string
   sets: SetEntry[]
+  planned?: PlannedItem // 来自模板的"目标几组几次"。手动加的动作没有这个
   showRpe: boolean
   onAddSet: (weightKg: number, reps: number, rpe: number | null) => void
   onRemoveSet: (setId: string) => void
@@ -311,8 +384,25 @@ function ExerciseCard({
       <div className="mb-3 flex items-center gap-2">
         <div className="flex-1">
           <div className="font-medium text-ink">{name}</div>
-          {equipment !== '' && (
-            <div className="mt-0.5 text-xs text-muted">{equipment}</div>
+          {(equipment !== '' || planned !== undefined) && (
+            <div className="mt-0.5 text-xs text-muted">
+              {equipment}
+              {equipment !== '' && planned !== undefined && ' · '}
+              {planned !== undefined && (
+                <>
+                  目标 {planned.targetSets} 组 × {planned.targetReps} 次 ·{' '}
+                  <span
+                    className={
+                      sets.length >= planned.targetSets
+                        ? 'font-semibold text-brand'
+                        : undefined
+                    }
+                  >
+                    {sets.length}/{planned.targetSets}
+                  </span>
+                </>
+              )}
+            </div>
           )}
         </div>
         <button

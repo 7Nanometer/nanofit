@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { HistoryScreen } from './screens/HistoryScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { TrainScreen } from './screens/TrainScreen'
 
@@ -43,9 +44,8 @@ function App() {
         <div className="mx-auto w-full max-w-[480px]">
           {/* 训练页已经是真的了（阶段 3 第 1 小步做的），不再是占位文字 */}
           {tab === 'train' && <TrainScreen />}
-          {tab === 'history' && (
-            <Placeholder title="历史" hint="阶段 4 会在这里看历史" />
-          )}
+          {/* 历史页已经是真的了（阶段 4 做的） */}
+          {tab === 'history' && <HistoryScreen />}
           {tab === 'stats' && (
             <Placeholder title="统计" hint="阶段 5 会在这里画图表" />
           )}
