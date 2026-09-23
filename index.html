@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- viewport-fit=cover：允许页面铺到 iPhone 的"刘海"和底部横条区域。
+         必须配合 CSS 里的安全区留白一起用，否则底部那排按钮会被横条盖住。 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+
+    <!-- theme-color：手机上地址栏/状态栏会跟着变成这个深黑色 -->
+    <meta name="theme-color" content="#121212" />
+
+    <meta
+      name="description"
+      content="NanoFIT — 本地健身记录本。数据只存在你自己手机上，不联网、不注册。"
+    />
+
+    <title>NanoFIT</title>
+  </head>
+  <body>
+    <!-- 整个 App 会被 React 画进这个 div 里 -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

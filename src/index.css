@@ -1,0 +1,64 @@
+/* ============================================================
+   全站样式的总入口
+   ============================================================
+   这个文件是唯一的样式文件。下面那些 @theme 里的颜色，
+   在任何一个 .tsx 文件里都能直接用类名调用，比如：
+     bg-bg      → 背景用页面底色
+     text-brand → 文字用主色（橙红）
+   不需要再另建 tailwind.config.js 之类的配置文件。
+   ============================================================ */
+
+@import "tailwindcss";
+
+/* @theme 是 Tailwind v4 定义"自定义颜色"的地方。
+   规则：变量名必须以 --color- 开头，Tailwind 才会自动帮你生成
+   bg-xxx（背景）、text-xxx（文字）、border-xxx（边框）这些类名。
+   写成 --brand 是不行的，什么都不会生成。
+   右边的色值来自 CLAUDE.md 里定好的配色。 */
+@theme {
+  --color-bg: #121212; /* 页面底色：最深的那层黑 */
+  --color-surface: #1e1e1e; /* 卡片底色：比页面稍亮，用来分层 */
+  --color-brand: #ff4d2e; /* 主色橙红：选中的按钮、重要数字 */
+  --color-ink: #ffffff; /* 主要文字：白 */
+  --color-ink-2: #c3c2b7; /* 次要文字：浅灰 */
+  --color-muted: #898781; /* 更弱的文字：灰。说明、单位用它 */
+  --color-line: #2e2e2e; /* 分隔线、边框 */
+}
+
+/* ---------- 下面是不用 Tailwind 类的几条全局基础设置 ---------- */
+
+/* 注意：这里故意不设置 height: 100%。
+   写死高度的话，等以后历史记录变长、内容超过一屏，就会溢出错位。
+   高度交给 App.tsx 里的 min-h-dvh 去管，它能让内容多长就多长。 */
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+
+  /* 手机上点按钮时，浏览器默认会闪一块灰色，这里关掉 */
+  -webkit-tap-highlight-color: transparent;
+
+  /* 手机上滑到头/滑到底时，不让页面整体回弹 —— 这样更像真 App 而不是网页 */
+  overscroll-behavior-y: none;
+
+  /* 中文字体优先用系统自带的，加载最快、最清晰 */
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    "Microsoft YaHei",
+    "PingFang SC",
+    sans-serif;
+}
+
+/* 【重要】手机上有个规则：输入框里的字小于 16px 时，
+   手指一点它，整个页面会被自动放大，而且缩不回去。
+   这个坑在电脑浏览器里完全看不出来，只有真机会出现。
+   这里统一兜底设成 16px，防止以后不小心改小。 */
+input,
+textarea,
+select {
+  font-size: 16px;
+  font-family: inherit;
+}
