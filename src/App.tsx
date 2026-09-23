@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsScreen } from './screens/SettingsScreen'
 
 // ============================================================
 // 这个文件是整个 App 的"外壳"
@@ -48,9 +49,8 @@ function App() {
           {tab === 'stats' && (
             <Placeholder title="统计" hint="阶段 5 会在这里画图表" />
           )}
-          {tab === 'settings' && (
-            <Placeholder title="设置" hint="阶段 2 会在这里放动作库" />
-          )}
+          {/* 设置页已经是真的了（阶段 2 做的），不再是占位文字 */}
+          {tab === 'settings' && <SettingsScreen />}
         </div>
       </main>
 
