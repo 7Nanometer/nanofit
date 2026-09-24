@@ -17,6 +17,7 @@ import { readSettings, writeSettings } from '../lib/storage'
 import { applyTheme } from '../lib/theme'
 import { textToNumber } from '../lib/calc'
 import { NumberField } from '../components/NumberField'
+import { VersionLine } from '../components/VersionLine'
 import { BodyScreen } from './BodyScreen'
 import { LibraryScreen } from './LibraryScreen'
 import { TemplateScreen } from './TemplateScreen'
@@ -491,6 +492,11 @@ export function SettingsScreen() {
           )}
         </div>
       </div>
+
+      {/* 最底下这一行版本号。
+          放在卡片列表【外面】，不跟上面那些设置项混在一起 ——
+          它是"查一下"用的说明文字，不是一个可以点的功能。 */}
+      <VersionLine />
     </div>
   )
 }

@@ -306,6 +306,27 @@ Capacitor 套壳。**网页版和安卓端共用同一份 src/ 代码**，靠 `C
 打包 APK：`cd android && ./gradlew assembleDebug`
 详见 README 的「安卓 App」一节。
 
+### 版本号（2026-09-24 定的）
+
+**每次打包前**改 `android/app/build.gradle` 这两行：
+
+```groovy
+versionCode 20260924                  // = 打包那天的日期 YYYYMMDD
+versionName "2026.09.24 · 18d4d1a"    // = 日期 · 7 位存档号
+```
+
+- `versionCode` 是安卓用来比大小的，**只能往大改**；改小了会
+  `INSTALL_FAILED_VERSION_DOWNGRADE`（屏幕上只显示"应用未安装"，不说明原因）
+- `versionName` 是给人看的。里面那串存档号 = 这份 APK 里代码对应的 git 存档
+- ★ **存档号有个先后顺序的讲究**：先把代码提交掉、拿到哈希，再把它写进
+  build.gradle 提交。所以 APK 里的代码 = 那个哈希对应的存档（外加一行版本号）
+- 设置页底部显示版本号（`src/components/VersionLine.tsx`），走
+  `App.getInfo()` 读**手机里那个包**的 versionName，不是写死的字符串。
+  浏览器里不调这个接口（AppWeb 里它是 `throw unimplemented`），显示"网页预览"
+- 同一天打第二个包号不变没关系，安卓允许同号覆盖
+- ★ 中文/特殊字符会不会被 Gradle 弄坏（Windows 上默认编码可能是 GBK）——
+  打完后用 `aapt2 dump badging` 验一遍
+
 ### 打包环境（2026-09-23 装好并验证过）
 
 - **Android Studio**：`C:\Program Files\Android\Android Studio`（自带 JBR **25**）
