@@ -38,6 +38,11 @@ import {
   weeklyKcal,
   weeklyVolumes,
 } from '../lib/stats'
+import {
+  averageSessionSec,
+  dailyDurations,
+  thisWeekDurationSec,
+} from '../lib/stats'
 import type { OneRmPoint } from '../lib/stats'
 import { formatDateCN } from '../lib/date'
 import { formatDuration } from '../lib/calc'
@@ -200,6 +205,16 @@ export function StatsScreen() {
   // 优先「身体数据」，没记过才用设置里那个默认值（见 resolveWeightKg）。
   const weightFromBody = latestWeightKg(bodyMetrics) !== undefined
 
+  // ---------- 训练时长（★ 2026-09-24 加的）----------
+  //
+  // 时长的算法**只有一份**（kcal.ts 的 sessionSeconds），这里只做汇总。
+  // 算不出来的那些（老记录没记开始时间）会被这几个函数跳过，
+  // 不拿 0 顶替 —— 0 是"练了 0 秒"，那是另一个意思。
+  const weekDurationSec = thisWeekDurationSec(sessions)
+  const avgSec = averageSessionSec(sessions)
+  // 30 天：按天画，一个月足够看出"最近练得久了还是短了"
+  const durationPoints = dailyDurations(sessions, 30)
+
   // 柱状图的纵轴刻度。第二个参数 true = 一定要含 0 ——
   // 柱状图里"柱子的高度"直接表示大小，不從 0 起的话比例是骗人的。
   const weeksAxis = niceAxis(
@@ -251,6 +266,23 @@ export function StatsScreen() {
               ? `kg · ${formatDateCN(lastSessionDate(lifting))}`
               : 'kg · 还没有力量记录'
           }
+        />
+      </div>
+
+      {/* ---------- 时长那两个数字（★ 2026-09-24 加的）----------
+          ★ 为什么另起一行，而不是塞进上面那一排当第三个：
+          "1 小时 24 分"在大字号下有 8 个字符宽，挤在三分之一行里会折成两行，
+          把那一排撑得高低不齐。**实测过才这么定的**，不是凭感觉。 */}
+      <div className="mb-3 flex gap-2">
+        <StatTile
+          label="本周练了多久"
+          value={formatDuration(weekDurationSec)}
+          hint="含组间休息"
+        />
+        <StatTile
+          label="平均每次"
+          value={avgSec === null ? '—' : formatDuration(avgSec)}
+          hint={avgSec === null ? '还没有能算出时长的训练' : '所有训练的平均'}
         />
       </div>
 
@@ -311,6 +343,30 @@ export function StatsScreen() {
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
+      )}
+
+      {/* ---------- 训练时长（★ 2026-09-24 加的）----------
+          一次训练都没记（或者老的都算不出时长）时不画：
+          一张空图配上一条 0 到 1 的刻度，看着就像 App 坏了。 */}
+      {durationPoints.length > 0 && (
+        <>
+          <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">
+            训练时长
+          </h2>
+          <ProgressChart
+            points={durationPoints}
+            dataKey="minutes"
+            title="每次训练有多久"
+            subtitle="按天合并：一天练两次算那天的总时长。含组间休息。"
+            unit="分钟"
+            columnLabel="时长"
+            color={C.brand}
+            // 按天合并之后，光看分钟数看不出那天是一次还是两次 ——
+            // 多给一列把这个说清楚
+            extraLabel="那天练了几次"
+            extra={(p) => `${p.count} 次`}
+          />
+        </>
       )}
 
       {/* ---------- 3. 单个动作的进步 ----------
@@ -763,6 +819,8 @@ function ProgressChart<T extends { label: string }>({
   columnLabel,
   color,
   startFromZero = false,
+  extraLabel,
+  extra,
 }: {
   points: T[]
   // 泛型 T 表示"这一张图画的是哪种数据"。dataKey 必须是 T 里面真的有的字段名，
@@ -780,6 +838,12 @@ function ProgressChart<T extends { label: string }>({
   // 容量这种"从 0 开始才有意义"的指标要传 true；
   // 重量和 1RM 不传，让纵轴自动缩放，否则 80kg 涨到 85kg 这种进步会被压平看不出来
   startFromZero?: boolean
+  // 可选：给「看数字」表多加一列。
+  // 时长那张图用它标出"那天练了几次" —— 因为按天合并之后，
+  // 光看分钟数看不出那天是一次还是两次。
+  // ★ 两个都传才生效，所以另外三个调用点一个字都不用改。
+  extraLabel?: string
+  extra?: (p: T) => string
 }) {
   const [C] = useState(chartColors)
   // 纵轴刻度：容量那种"从 0 起才有意义"的传 startFromZero=true，
@@ -799,10 +863,17 @@ function ProgressChart<T extends { label: string }>({
       rows={points.map((p) => ({
         日期: p.label,
         [columnLabel]: `${Number(p[dataKey]).toLocaleString()} ${unit}`,
+        // 有 extra 才加这一列
+        ...(extra !== undefined && extraLabel !== undefined
+          ? { [extraLabel]: extra(p) }
+          : {}),
       }))}
       columns={[
         { key: '日期', label: '日期' },
         { key: columnLabel, label: columnLabel },
+        ...(extra !== undefined && extraLabel !== undefined
+          ? [{ key: extraLabel, label: extraLabel }]
+          : []),
       ]}
     >
       <ResponsiveContainer width="100%" height="100%">

@@ -1,7 +1,7 @@
 import type { BodyMetric, SetEntry, WorkoutSession } from '../types'
 import { estimate1RM, sessionVolume, setVolume } from './calc'
-import { dateKey, parseDateKey, shiftDays } from './date'
-import { roundKcal, sessionKcalSplit } from './kcal'
+import { dateKey, parseDateKey, shiftDays, todayKey } from './date'
+import { roundKcal, sessionKcalSplit, sessionSeconds } from './kcal'
 
 // ============================================================
 // 把原始记录"算"成图表要用的数据
@@ -563,4 +563,82 @@ export function weeklyKcal(
     })
   }
   return points
+}
+
+// ---------- 训练时长 ----------
+//
+// ★ 时长的算法**只有一份**：kcal.ts 的 sessionSeconds()。
+//   这里全是"把它汇总成图表数据"，不重算一遍时长 ——
+//   重算的话，历史页显示的时长和统计页的总和对不上，用户没法核对。
+//   算不出来的（老记录没记开始时间）一律跳过，不拿 0 顶替：
+//   0 是"练了 0 秒"，那是另一个意思，混进平均值里会把数字往下拽。
+
+// 本周训练总时长（秒）。含组间休息、含有氧 —— 就是"在健身房待了多久"。
+//
+// 【为什么含有氧】时长记的是"这场训练从开始到结束"，有氧也是训练的一部分。
+// 它和"本周有氧"那个卡片不是一回事：那个只数有氧那几台器械上的时间。
+export function thisWeekDurationSec(sessions: WorkoutSession[]): number {
+  const from = thisWeekStartKey()
+  return sessions
+    .filter((s) => s.date >= from)
+    .reduce((sum, s) => sum + (sessionSeconds(s) ?? 0), 0)
+}
+
+// 平均每次训练时长（秒）。一次都算不出来返回 null。
+//
+// 【分母是"算得出来的那些次"，不是全部】老记录没记开始时间，算不出时长；
+// 把它们算进分母会凭空拉低平均值 —— 那是拿"不知道"当"练得短"。
+export function averageSessionSec(
+  sessions: WorkoutSession[],
+): number | null {
+  const all = sessions
+    .map((s) => sessionSeconds(s))
+    .filter((sec): sec is number => sec !== null && sec > 0)
+  if (all.length === 0) return null
+  return Math.round(all.reduce((a, b) => a + b, 0) / all.length)
+}
+
+// 按天合并的时长趋势，给折线图用。
+//
+// 【为什么按天合并，不按"次"画】
+// 一天练两次的话，按次画会在同一个日期上叠两个点，看不出每天的总量。
+// 合并成一个点 = "那天一共练了多久"，一眼看出训练量。
+// 想知道那天是几次？看 count —— 界面上的「看数字」表会把它标出来。
+export type DayDurationPoint = {
+  label: string // '9/24'
+  date: string // '2026-09-24'
+  minutes: number // 那天一共多少分钟
+  count: number // 那天练了几次
+}
+
+export function dailyDurations(
+  sessions: WorkoutSession[],
+  dayCount = 30,
+): DayDurationPoint[] {
+  // 先按日期把时长和次数攒起来
+  const byDate = new Map<string, { sec: number; count: number }>()
+  for (const s of sessions) {
+    const sec = sessionSeconds(s)
+    if (sec === null || sec <= 0) continue
+    const cur = byDate.get(s.date) ?? { sec: 0, count: 0 }
+    cur.sec += sec
+    cur.count += 1
+    byDate.set(s.date, cur)
+  }
+
+  // 只留最近这些天。往前推日期用 shiftDays，和别处同一个口径
+  const from = shiftDays(todayKey(), -(dayCount - 1))
+
+  const points: DayDurationPoint[] = []
+  for (const [date, v] of byDate) {
+    if (date < from) continue
+    points.push({
+      label: shortLabel(date),
+      date,
+      minutes: Math.round(v.sec / 60),
+      count: v.count,
+    })
+  }
+  // 按日期从早到晚 —— 折线图的横轴得是从左到右
+  return points.sort((a, b) => a.date.localeCompare(b.date))
 }
