@@ -341,6 +341,13 @@ versionName "2026.09.24 · 18d4d1a"    // = 日期 · 7 位存档号
   已在 `android/gradle.properties` 加 `android.overridePathCheck=true` 跳过。
   ★ 以后打包报奇怪的错，第一个怀疑这里。
 - `android/local.properties` 里是 SDK 路径（已 gitignore，不进仓库）。
+- ★★ **签名变了的后果比想象中重**：debug 包的签名来自这台电脑的
+  `~/.android/debug.keystore`（自动生成、**不随仓库走**）。
+  签名一变，新版就装不上（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`，
+  手机上只显示"应用未安装"），只能先卸载 —— **而卸载 = 手机上的训练数据全没**，
+  因为数据只在那台手机里。
+  → **换电脑打包之前，先让主人导一份备份**，再动手。
+  → 打包后验签名的两句命令见 README「怎么打包 APK」那节。
 - Gradle 第一次下载会超时（重定向到 GitHub），要挂代理：
   `GRADLE_OPTS="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7897"`。只影响第一次。
 
