@@ -95,7 +95,11 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'bw-wide-grip-pullup', name: '宽距引体向上', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '握得比肩宽，偏背阔外侧，也是三种引体里最难的。重量填 0' },
   { id: 'bw-inverted-row', name: '反向划船', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '杠铃架在腰高处，身体在杆下仰躺，把胸口拉向杆。越接近水平越难。重量填 0' },
 
-  // ---------------- 腿（9 个，这一类多给两个）----------------
+  // ---------------- 腿（35 个）----------------
+  //
+  // 前 9 个是 2026-09-23 最初那批，id 不许改。后 26 个是 2026-09-24 扩充的。
+  // 这一类动作最多（腿的机器本来就多），分几个小段排：
+  //   深蹲类 → 单腿/箭步类 → 腿举 → 腿屈伸/弯举 → 臀 → 小腿
   { id: 'bb-squat', name: '杠铃深蹲', muscleGroup: 'legs', equipment: '杠铃', isCustom: false, note: '下蹲到大腿和地面平行，膝盖方向跟着脚尖走' },
   { id: 'db-goblet-squat', name: '高脚杯深蹲', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '双手抱一个哑铃在胸前，新手学深蹲的最佳入门动作' },
   { id: 'mach-leg-press', name: '腿举', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '脚踩宽一点偏大腿内侧，踩窄一点偏大腿前侧' },
@@ -106,13 +110,71 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'mach-leg-curl', name: '俯卧腿弯举', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '练大腿后侧，别翘屁股借力' },
   { id: 'mach-calf-raise', name: '站姿提踵', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '练小腿。先落到最低拉长，再顶到最高停 1 秒' },
 
-  // ---------------- 肩（6 个）----------------
+  // ---- 2026-09-24 扩充（26 个）----
+  // 深蹲类
+  { id: 'bb-front-squat', name: '前蹲', muscleGroup: 'legs', equipment: '杠铃', isCustom: false, note: '杠铃架在锁骨前，肘朝前抬平。比后蹲更练大腿前侧，也更要求背挺直' },
+  { id: 'smith-squat', name: '史密斯深蹲', muscleGroup: 'legs', equipment: '史密斯', isCustom: false, note: '轨道固定不用管平衡，适合最后几组冲力竭。脚往前站一点更练臀' },
+  { id: 'mach-hack-squat', name: '哈克深蹲', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '背靠住滑板、肩膀顶住肩垫往下蹲。腰几乎不吃力' },
+  { id: 'db-sumo-squat', name: '相扑深蹲', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '站得很宽、脚尖朝外，主要练大腿内侧。往下坐，别往后坐' },
+  { id: 'bw-wall-sit', name: '靠墙静蹲', muscleGroup: 'legs', equipment: '自重', isCustom: false, note: '背贴墙蹲到大腿平行地面，坚持住。重量填 0，次数填坚持的秒数' },
+  // 单腿 / 箭步类
+  { id: 'db-reverse-lunge', name: '反向箭步蹲', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '往后撤一步再下蹲。比往前迈的箭步蹲对膝盖友好。只记一侧的重量' },
+  { id: 'db-walking-lunge', name: '走步箭步蹲', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '一边往前迈一边交替下蹲，走完一段。很喘。只记一侧的重量' },
+  { id: 'db-step-up', name: '登凳', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '单脚踩稳箱子或凳子，用那条腿把身体撑上去。只记一侧的重量' },
+  { id: 'db-single-leg-rdl', name: '单腿罗马尼亚硬拉', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '单脚站，另一条腿往后伸，俯身再起来。练臀也练平衡。只记一侧的重量' },
+  { id: 'mach-single-leg-press', name: '单腿腿举', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '一条腿蹬，活动范围更大，也更容易看出两边差多少。只记一侧的重量' },
+  // 腿屈伸 / 弯举
+  { id: 'mach-seated-leg-curl', name: '坐姿腿弯举', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '坐着做，练大腿后侧。和"俯卧腿弯举"是两台机器，感受也不一样' },
+  { id: 'mach-single-leg-curl', name: '单腿腿弯举', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '一条腿做，能纠正两边力量差。只记一侧的重量' },
+  // 臀
+  { id: 'bb-hip-thrust', name: '臀推', muscleGroup: 'legs', equipment: '杠铃', isCustom: false, note: '上背靠凳、杠铃压在胯上，用屁股把重量顶起来，顶点停 1 秒' },
+  { id: 'mach-hip-thrust', name: '器械臀推', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '专门的臀推机，比杠铃好上重量，也不用自己摆姿势' },
+  { id: 'mach-single-leg-hip-thrust', name: '单腿臀推', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '一条腿做臀推，屁股更吃力。只记一侧的重量' },
+  { id: 'db-glute-bridge', name: '臀桥', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '躺地上屈膝，用屁股把胯顶起来。想加重量就在胯上放个哑铃' },
+  { id: 'db-single-leg-glute-bridge', name: '单腿臀桥', muscleGroup: 'legs', equipment: '哑铃', isCustom: false, note: '一条腿撑地、另一条伸直抬起做臀桥。更吃力也更练单侧。只记一侧的重量' },
+  { id: 'mach-hip-abduction', name: '髋外展', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '坐着把两条腿往外撑开。练臀中肌，屁股两侧的线条靠它' },
+  { id: 'mach-hip-adduction', name: '髋内收', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '坐着把两条腿往中间夹。练大腿内侧' },
+  { id: 'cable-hip-abduction', name: '绳索髋外展', muscleGroup: 'legs', equipment: '绳索', isCustom: false, note: '脚踝绑在低位滑轮上，把腿往外打开。角度和器械不同。只记一侧的重量' },
+  // 小腿
+  { id: 'mach-seated-calf-raise', name: '坐姿提踵', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '坐着屈膝做提踵，更偏小腿深层那块（比目鱼肌）' },
+  { id: 'smith-calf-raise', name: '史密斯提踵', muscleGroup: 'legs', equipment: '史密斯', isCustom: false, note: '脚掌前半段踩在杠下方，用史密斯机的轨道做提踵。稳，能上大重量' },
+  { id: 'mach-leg-press-calf-raise', name: '腿举提踵', muscleGroup: 'legs', equipment: '固定器械', isCustom: false, note: '脚掌踩在腿举机踏板的边缘做提踵，能上很大重量' },
+  { id: 'bw-single-leg-calf-raise', name: '单腿提踵', muscleGroup: 'legs', equipment: '自重', isCustom: false, note: '单脚站，扶住东西保持平衡，把脚跟提起来。只记一侧的重量' },
+  // 大腿后侧 / 下背
+  { id: 'bb-stiff-leg-deadlift', name: '直腿硬拉', muscleGroup: 'legs', equipment: '杠铃', isCustom: false, note: '膝盖基本不屈，主要拉大腿后侧。背必须全程挺直，腰不好就别做' },
+  { id: 'bb-good-morning', name: '早安式体前屈', muscleGroup: 'legs', equipment: '杠铃', isCustom: false, note: '杠铃扛在斜方肌上，屈髋往前俯身再起来。练大腿后侧和下背，务必小重量' },
+
+  // ---------------- 肩（19 个）----------------
+  //
+  // 前 6 个是 2026-09-23 最初那批，id 不许改。后 13 个是 2026-09-24 扩充的。
+  // 排法：先推举（前束/整体）→ 侧平举（中束）→ 反向飞鸟（后束）→ 耸肩（斜方肌）
   { id: 'bb-overhead-press', name: '杠铃肩上推举', muscleGroup: 'shoulders', equipment: '杠铃', isCustom: false, note: '推到头顶耳侧，全程别塌腰' },
   { id: 'db-shoulder-press', name: '哑铃肩上推举', muscleGroup: 'shoulders', equipment: '哑铃', isCustom: false, note: '手心相对或朝前，肘略在身体前方' },
   { id: 'db-lateral-raise', name: '哑铃侧平举', muscleGroup: 'shoulders', equipment: '哑铃', isCustom: false, note: '小重量，肘微屈，抬到和肩同高就停' },
   { id: 'db-rear-delt-fly', name: '俯身哑铃飞鸟', muscleGroup: 'shoulders', equipment: '哑铃', isCustom: false, note: '练三角肌后束。俯身背部平直，手往两侧打开' },
   { id: 'cable-face-pull', name: '绳索面拉', muscleGroup: 'shoulders', equipment: '绳索', isCustom: false, note: '拉到脸前方，肘比手高，练后束还能改善圆肩' },
   { id: 'db-arnold-press', name: '阿诺德推举', muscleGroup: 'shoulders', equipment: '哑铃', isCustom: false, note: '推起过程中手腕由朝内旋到朝外' },
+
+  // ---- 2026-09-24 扩充（13 个）----
+  // 推举
+  { id: 'mach-shoulder-press', name: '坐姿推肩机', muscleGroup: 'shoulders', equipment: '固定器械', isCustom: false, note: '坐着推，背后有靠垫腰不吃力，适合专门练肩' },
+  { id: 'smith-shoulder-press', name: '史密斯肩上推举', muscleGroup: 'shoulders', equipment: '史密斯', isCustom: false, note: '在史密斯机里做肩上推举。轨道固定，冲重量时更安全' },
+  { id: 'bb-landmine-press', name: '地雷管推举', muscleGroup: 'shoulders', equipment: '杠铃', isCustom: false, note: '杠铃一头固定在墙角，另一头扛在肩前往上推。肩不容易疼' },
+  // 前束
+  { id: 'db-front-raise', name: '哑铃前平举', muscleGroup: 'shoulders', equipment: '哑铃', isCustom: false, note: '两手轮流或同时往前平举到肩高。练三角肌前束。别甩上去' },
+  // 中束
+  { id: 'cable-lateral-raise', name: '绳索侧平举', muscleGroup: 'shoulders', equipment: '绳索', isCustom: false, note: '低位滑轮的单柄，一只手拉着往侧面平举。全程都有张力' },
+  { id: 'mach-lateral-raise', name: '器械侧平举', muscleGroup: 'shoulders', equipment: '固定器械', isCustom: false, note: '专门的侧平举机，手臂有靠垫，不容易靠甩借力。只记一侧的重量' },
+  // 后束
+  { id: 'mach-reverse-pec-deck', name: '反向蝴蝶机', muscleGroup: 'shoulders', equipment: '固定器械', isCustom: false, note: '反过来坐，胸口贴住靠垫，两只手往两侧打开。练三角肌后束' },
+  { id: 'cable-rear-delt-fly', name: '绳索反向飞鸟', muscleGroup: 'shoulders', equipment: '绳索', isCustom: false, note: '两只手拉着绳索往两侧打开，练后束。滑轮高度可调，换角度换感觉' },
+  // 斜方肌
+  { id: 'bb-shrug', name: '杠铃耸肩', muscleGroup: 'shoulders', equipment: '杠铃', isCustom: false, note: '杠铃拎在身前，肩膀往耳朵方向耸起来再放下。练斜方肌，别转肩' },
+  { id: 'db-shrug', name: '哑铃耸肩', muscleGroup: 'shoulders', equipment: '哑铃', isCustom: false, note: '两只哑铃拎在身体两侧往上耸。比杠铃活动范围更大' },
+  { id: 'mach-shrug', name: '器械耸肩', muscleGroup: 'shoulders', equipment: '固定器械', isCustom: false, note: '专门的耸肩机，能上大重量而且不用管平衡' },
+  // 其他
+  { id: 'bb-upright-row', name: '直立划船', muscleGroup: 'shoulders', equipment: '杠铃', isCustom: false, note: '杠铃贴着身体往上提到下巴高度，肘比手高。肩夹挤感明显就换窄握或少做' },
+  { id: 'bw-handstand-pushup', name: '倒立撑', muscleGroup: 'shoulders', equipment: '自重', isCustom: false, note: '靠墙倒立着往下推。很硬核，肩力量不够别硬上。重量填 0' },
 
   // ---------------- 手臂（6 个）----------------
   { id: 'bb-curl', name: '杠铃弯举', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '肘夹紧身体两侧，别用腰晃着甩上去' },
