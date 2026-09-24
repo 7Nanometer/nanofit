@@ -75,8 +75,6 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'db-one-arm-row', name: '单臂哑铃划船', muscleGroup: 'back', equipment: '哑铃', isCustom: false, note: '一手一膝撑在凳上，肘贴着身体往后拉。只记一侧的重量' },
   { id: 'cable-seated-row', name: '坐姿绳索划船', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '先夹肩胛再拉手，上半身别跟着后仰' },
   { id: 'cable-straight-arm-pulldown', name: '直臂下压', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '手臂基本伸直往下压到大腿侧面，专门练背阔肌' },
-  { id: 'bb-deadlift', name: '硬拉', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '背全程挺直，杠铃贴着腿起，臀和腿同时发力' },
-
   // ---- 2026-09-24 扩充（16 个）----
   { id: 'bb-reverse-grip-row', name: '反握杠铃划船', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '手心朝前握（反握），肘更贴身体，下背压力小，偏背阔下部' },
   { id: 'bb-t-bar-row', name: 'T杠划船', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '杠铃一头固定住，用 V 型把手拉。比杠铃划船好稳，适合上大重量' },
@@ -240,6 +238,27 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'bw-back-extension', name: '山羊挺身', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '罗马椅上脚固定住，上半身往下再起来。练下背和臀。重量填 0' },
   { id: 'bw-ab-wheel', name: '健腹轮', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '跪着双手握住健腹轮往前推出去再收回来。腰别塌。重量填 0' },
   { id: 'bw-dragon-flag', name: '龙旗', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '躺着抓住固定物，身体像旗子一样笔直抬起放下。非常硬核，先练慢慢放下那半程' },
+
+  // ---------------- 全身（11 个）----------------
+  //
+  // 【这一类是 2026-09-24 新开的】
+  // 原来只有 6 个肌群，硬拉被塞在"背"里 —— 其实它臀、腿、背、握力全在使劲，
+  // 归到任何一个单一肌群都是骗人。所以新开"全身"这一类，把这类动作归到这儿。
+  //
+  // ★ 硬拉的 id（bb-deadlift）一个字母都没改，只是 muscleGroup 从 back
+  //   变成了 fullbody。你以前练过的硬拉记录照样认得它，一天都不会丢。
+  //   这就是"改分类安全、改 id 要命"的意思。
+  { id: 'bb-deadlift', name: '硬拉', muscleGroup: 'fullbody', equipment: '杠铃', isCustom: false, note: '背全程挺直，杠铃贴着腿起，臀和腿同时发力' },
+  { id: 'bb-sumo-deadlift', name: '相扑硬拉', muscleGroup: 'fullbody', equipment: '杠铃', isCustom: false, note: '站得很宽、双手在两腿之间握杠。行程比传统硬拉短，腰的压力也小一些' },
+  { id: 'bb-trap-bar-deadlift', name: '六角杠硬拉', muscleGroup: 'fullbody', equipment: '杠铃', isCustom: false, note: '用六角形的杠铃，人站在杠中间。对腰最友好的硬拉，新手可以从它开始' },
+  { id: 'bb-rack-pull', name: '架上拉', muscleGroup: 'fullbody', equipment: '杠铃', isCustom: false, note: '杠铃架在膝盖高度附近，只做上半程。专门练锁定那一下，力量举常用' },
+  { id: 'bb-power-clean', name: '高翻', muscleGroup: 'fullbody', equipment: '杠铃', isCustom: false, note: '爆发把杠铃从地面翻到肩膀前。举重动作，先用空杆学，最好有人教' },
+  { id: 'bb-clean-and-jerk', name: '挺举', muscleGroup: 'fullbody', equipment: '杠铃', isCustom: false, note: '先高翻到肩，再借力举过头顶。技术性最强的动作，别自己瞎练' },
+  { id: 'db-farmers-walk', name: '农夫行走', muscleGroup: 'fullbody', equipment: '哑铃', isCustom: false, note: '两手拎着很重的哑铃走一段。全身都在使劲，通常握力先撑不住。只记一侧的重量' },
+  { id: 'kb-swing', name: '壶铃摆动', muscleGroup: 'fullbody', equipment: '壶铃', isCustom: false, note: '靠髋部往前顶把壶铃甩到胸口高度。发力在屁股，不是用手抬' },
+  { id: 'kb-clean', name: '壶铃高翻', muscleGroup: 'fullbody', equipment: '壶铃', isCustom: false, note: '把壶铃从下方翻到肩膀外侧靠稳。手腕别硬接，让壶铃自然转过来' },
+  { id: 'kb-turkish-getup', name: '土耳其起立', muscleGroup: 'fullbody', equipment: '壶铃', isCustom: false, note: '躺着单手举着壶铃，一步步站起来再一步步躺回去。很考验肩的稳定性' },
+  { id: 'bw-burpee', name: '波比跳', muscleGroup: 'fullbody', equipment: '自重', isCustom: false, note: '下蹲撑地 → 跳成平板 → 收腿 → 跳起。很喘。重量填 0' },
 
   // ---------------- 有氧（11 个）----------------
   //
