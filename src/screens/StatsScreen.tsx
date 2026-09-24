@@ -32,6 +32,7 @@ import {
   thisWeekCardioSec,
   thisWeekCount,
   thisWeekKcal,
+  thisWeekStartKey,
   thisWeekVolume,
   usedExerciseIds,
   weeklyKcal,
@@ -40,7 +41,15 @@ import {
 import type { OneRmPoint } from '../lib/stats'
 import { formatDateCN } from '../lib/date'
 import { formatDuration } from '../lib/calc'
-import { formatKcal, resolveWeightKg, roundKcal } from '../lib/kcal'
+import {
+  explainSessionKcal,
+  formatKcal,
+  latestWeightKg,
+  metLabel,
+  resolveWeightKg,
+  roundKcal,
+} from '../lib/kcal'
+import type { KcalExplain } from '../lib/kcal'
 import { ChartCard } from '../components/ChartCard'
 import { StatTile } from '../components/StatTile'
 import { chartColors } from '../lib/theme'
@@ -163,6 +172,33 @@ export function StatsScreen() {
     kcalPoints.flatMap((p) => [p.strength, p.cardio]),
     true,
   )
+
+  // ---------- 「看算式」要列的东西 ----------
+  //
+  // 把本周每一次训练用到的输入全摆出来：哪一档、MET 多少、体重、
+  // 整场多久、其中有氧多久、力量按多久算、乘出来是多少。
+  // 用户拿这些就能自己核对，不用每次都来问"为什么是这个数"。
+  //
+  // 【为什么只列本周，不列本月】
+  // 上面一个卡片是本周、一个是本月。本月可能有十几条，全列出来太长。
+  // 两个数用的是同一套算法累加的，看懂本周就会看本月。
+  //
+  // 【起点必须和 thisWeekKcal 用同一个】
+  // 各算各的话，哪天"一周从周几开始"这个规矩变了，就会出现
+  // "卡片说本周 300，明细只列出 200 的量"这种自相矛盾。
+  const [showFormula, setShowFormula] = useState(false)
+  const weekStart = thisWeekStartKey()
+  const weekRows = sessions
+    .filter((s) => s.date >= weekStart)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .flatMap((s) => {
+      const explain = explainSessionKcal(s, weightKg, cardioIds)
+      return explain === null ? [] : [{ session: s, explain }]
+    })
+
+  // 体重是从哪来的 —— 用户得知道这个 80 是谁。
+  // 优先「身体数据」，没记过才用设置里那个默认值（见 resolveWeightKg）。
+  const weightFromBody = latestWeightKg(bodyMetrics) !== undefined
 
   // 柱状图的纵轴刻度。第二个参数 true = 一定要含 0 ——
   // 柱状图里"柱子的高度"直接表示大小，不從 0 起的话比例是骗人的。
@@ -441,6 +477,54 @@ export function StatsScreen() {
             />
           </div>
 
+          {/* ---------- 看算式（★ 2026-09-24 加的）----------
+              加这块的直接原因：有人发现热量明显偏低，但页面上只有结果、
+              没有任何过程，他只能靠反推才猜出"是不是用了低强度那一档"，
+              然后来问。把这些输入摆出来，他自己就能看出来。 */}
+          <button
+            type="button"
+            onClick={() => setShowFormula(!showFormula)}
+            className="mb-3 min-h-11 w-full rounded-lg border border-line px-3 text-sm text-ink-2"
+          >
+            {showFormula ? '收起算式' : '这些数是怎么算出来的？'}
+          </button>
+
+          {showFormula && (
+            <div className="mb-3 rounded-xl border border-line bg-surface p-3 text-xs text-muted">
+              <div className="text-ink-2">用到的数据</div>
+              <div className="mt-0.5">
+                体重 {weightKg} kg（
+                {weightFromBody
+                  ? '来自「身体数据」里最近一次'
+                  : '来自「设置 → 默认体重」'}
+                ）
+              </div>
+              <div className="mt-0.5">
+                公式 消耗 =（MET − 1）× 体重(kg) × 时长(小时)
+              </div>
+              <div className="mt-0.5">
+                减 1 是为了只算"运动额外多消耗的"，不含躺着也要烧的基础代谢
+              </div>
+
+              <div className="mt-3 text-ink-2">
+                本周的每一次训练
+                {weekRows.length > 0 && `（共 ${weekRows.length} 次）`}
+              </div>
+              {weekRows.length === 0 ? (
+                <div className="mt-1">这周还没练过。</div>
+              ) : (
+                weekRows.map((row) => (
+                  <KcalStepRow
+                    key={row.session.id}
+                    date={row.session.date}
+                    explain={row.explain}
+                    weightKg={weightKg}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
           <ChartCard
             title="每周消耗"
             subtitle="最近 8 周。力量和有氧分开画，因为它们的算法完全不同。"
@@ -574,6 +658,95 @@ export function StatsScreen() {
 // 最后那个日期是"最近一次"，看不到会很难受 —— 别让它被自动省掉。
 const X_TICK_MIN_GAP = 40
 const X_TICK_INTERVAL = 'preserveStartEnd' as const
+
+// ============================================================
+// 「看算式」里的一次训练
+// ============================================================
+// 把这次训练用到的每一样输入都写出来，让人能自己核对：
+// 哪一档、MET 多少、体重多少、按多长时间算的、乘出来是多少。
+//
+// 【为什么不自己算，全部用算好的数】
+// 这里的每一个数都来自 lib/kcal.ts 的 explainSessionKcal()，
+// 和页面上那个总数是**同一份算法**出来的。在这里重算一遍的话，
+// 哪天公式改了，说明文字就会和数字对不上 —— 用户会照着一个错的
+// 算式去核对，然后怀疑是自己算错了。
+//
+// 【为什么要显示"按中等算"这种话】
+// 老记录没存过强度档位，系统用的是"中等"兜底。不说明的话，
+// 用户会以为当初就是按中等判的 —— 那是两回事。
+function KcalStepRow({
+  date,
+  explain,
+  weightKg,
+}: {
+  date: string
+  explain: KcalExplain
+  weightKg: number
+}) {
+  // 小时保留两位小数 —— 和公式里那个"时长(小时)"对得上就行。
+  // 42 分钟 → 0.70 小时。
+  const hours = (sec: number) => (sec / 3600).toFixed(2)
+
+  const hasCardioKcal = explain.cardioKcal > 0
+  const hasStrengthKcal = explain.strengthKcal > 0
+
+  return (
+    <div className="mt-2 border-t border-line pt-2">
+      <div className="text-ink-2">{formatDateCN(date)}</div>
+
+      {/* 第一行：用了哪一档、总共多久
+          ★ 纯有氧的场次【不能】显示强度档位。那个概念只对力量训练成立，
+            而 explainSessionKcal 为了算数会给它填一个兜底的"中等"——
+            照直显示的话会写出"中等 3.5（老记录没存档位）"，
+            既难懂又是假的：那次训练压根没有"力量强度"这回事。
+            strengthSec 是不是 null，就是"有没有力量记录"的判据。 */}
+      <div className="mt-0.5">
+        {explain.strengthSec === null
+          ? '纯有氧，不涉及强度档位'
+          : `${metLabel(explain.level)}${
+              explain.levelIsDefault ? '（老记录没存档位，按中等算）' : ''
+            }`}
+        {explain.totalSec !== null &&
+          ` · 整场 ${formatDuration(explain.totalSec)}`}
+        {explain.cardioSec > 0 &&
+          explain.strengthSec !== null &&
+          // 注意 ${...} 和"算"之间不能有空格 —— 中文里塞个空格很扎眼
+          ` · 其中有氧 ${formatDuration(explain.cardioSec)}，力量按 ${formatDuration(
+            explain.strengthSec,
+          )}算`}
+      </div>
+
+      {/* 第二行：算式本体 */}
+      {explain.totalSec === null && !hasCardioKcal ? (
+        <div className="mt-0.5">
+          算不出来 —— 这条记录没记开始时间，也没有有氧时长
+        </div>
+      ) : (
+        <>
+          {hasStrengthKcal && (
+            <div className="mt-0.5">
+              力量 （{explain.met} − 1）× {weightKg} kg ×{' '}
+              {hours(explain.strengthSec ?? 0)} 小时 ≈{' '}
+              {roundKcal(explain.strengthKcal)} 千卡
+            </div>
+          )}
+          {hasCardioKcal && (
+            <div className="mt-0.5">
+              有氧 按动作和时长查表 ≈ {roundKcal(explain.cardioKcal)} 千卡
+            </div>
+          )}
+          {/* 两样都有时才写"合计"，只有一样时最后那个数就是它自己，
+              再写一遍"合计"是啰嗦 */}
+          {hasStrengthKcal && hasCardioKcal && (
+            <div className="mt-0.5 text-ink-2">
+              合计 ≈ {roundKcal(explain.total)} 千卡
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
 // ============================================================
 // 一张"跟着时间进步"的折线图

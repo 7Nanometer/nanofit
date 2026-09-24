@@ -304,6 +304,43 @@ export function sessionKcal(
   weightKg: number | undefined,
   cardioIds: ReadonlySet<string>,
 ): number | null {
+  const e = explainSessionKcal(session, weightKg, cardioIds)
+  // 一条都算不出来时返回 null，而不是 0 ——
+  // "没数据"和"消耗了 0 千卡"是两回事，界面上的处理也完全不同
+  return e === null || e.total <= 0 ? null : e.total
+}
+
+// 一次训练的热量"是怎么算出来的" —— 给统计页那条可展开的说明用。
+//
+// 【为什么把它和 sessionKcal 写成同一件事】
+// 说明文字必须和实际算出来的数**用的是同一个公式**。
+// 界面那边照着重算一遍的话，哪天公式改了，说明就会和数字对不上 ——
+// 那种"解释"比不解释更糟：用户会照着一个错的算式去核对，
+// 然后怀疑是自己算错了。所以 sessionKcal 现在就是"取这里的 total"，
+// 全项目只有这一份算法。
+//
+// 【它多给了什么】
+// 公式用到的每一样输入：哪一档、MET 多少、体重、整场多久、
+// 其中有氧多久、力量按多久算。用户拿这些就能自己核对。
+export type KcalExplain = {
+  level: StrengthMetLevel
+  // 老记录没存过档位，用的是"中等"兜底 —— 这个必须让用户知道，
+  // 不然他会以为系统当初就是这么判的
+  levelIsDefault: boolean
+  met: number
+  totalSec: number | null // 整场时长（含组间休息）
+  cardioSec: number // 其中的有氧时长
+  strengthSec: number | null // 力量部分 = 整场 − 有氧
+  strengthKcal: number
+  cardioKcal: number
+  total: number
+}
+
+export function explainSessionKcal(
+  session: WorkoutSession,
+  weightKg: number | undefined,
+  cardioIds: ReadonlySet<string>,
+): KcalExplain | null {
   if (weightKg === undefined || weightKg <= 0) return null
 
   const cardioEntries = session.entries.filter((e) =>
@@ -313,32 +350,41 @@ export function sessionKcal(
     (e) => !cardioIds.has(e.exerciseId),
   )
 
-  const cardioKcalTotal = cardioEntries.reduce(
+  const cardioKcal = cardioEntries.reduce(
     (sum, e) => sum + cardioEntryKcal(e, weightKg),
     0,
   )
+  const cardioSec = cardioEntries.reduce(
+    (sum, e) => sum + (e.durationSec ?? 0),
+    0,
+  )
 
-  let strengthKcalTotal = 0
+  const level = session.metLevel ?? DEFAULT_MET_LEVEL
+  const met = metOf(level)
+
+  // 整场时长。有力量记录才算力量那部分 —— 纯有氧场次里
+  // 剩下的那几分钟（走回更衣室之类）不该按杠铃训练的强度算。
+  const totalSec = sessionSeconds(session)
+  let strengthSec: number | null = null
+  let strengthKcal = 0
   if (strengthEntries.length > 0) {
-    const totalSec = sessionSeconds(session)
-    const cardioSec = cardioEntries.reduce(
-      (sum, e) => sum + (e.durationSec ?? 0),
-      0,
-    )
     // 减出来是负数说明这次训练的有氧时长记重复了或者记岔了，
     // 按 0 处理，不给一个负的热量
-    const strengthSec = totalSec === null ? 0 : Math.max(0, totalSec - cardioSec)
-    strengthKcalTotal = estimateKcal(
-      metOf(session.metLevel ?? DEFAULT_MET_LEVEL),
-      weightKg,
-      strengthSec,
-    )
+    strengthSec = totalSec === null ? 0 : Math.max(0, totalSec - cardioSec)
+    strengthKcal = estimateKcal(met, weightKg, strengthSec)
   }
 
-  const total = strengthKcalTotal + cardioKcalTotal
-  // 一条都算不出来时返回 null，而不是 0 ——
-  // "没数据"和"消耗了 0 千卡"是两回事，界面上的处理也完全不同
-  return total > 0 ? total : null
+  return {
+    level,
+    levelIsDefault: session.metLevel === undefined,
+    met,
+    totalSec,
+    cardioSec,
+    strengthSec,
+    strengthKcal,
+    cardioKcal,
+    total: strengthKcal + cardioKcal,
+  }
 }
 
 // 把一次训练的消耗拆成"力量"和"有氧"两半，统计页要分开显示。
@@ -353,14 +399,11 @@ export function sessionKcalSplit(
   weightKg: number | undefined,
   cardioIds: ReadonlySet<string>,
 ): SessionKcalSplit | null {
-  const total = sessionKcal(session, weightKg, cardioIds)
-  if (total === null || weightKg === undefined) return null
-
-  const cardio = session.entries
-    .filter((e) => cardioIds.has(e.exerciseId))
-    .reduce((sum, e) => sum + cardioEntryKcal(e, weightKg), 0)
-
-  return { strength: total - cardio, cardio, total }
+  // 走和 sessionKcal 完全相同的那一条路，不自己再算一遍 ——
+  // 以前这里把"有氧那部分"的求和抄了第二遍，抄的东西迟早会和原件走偏
+  const e = explainSessionKcal(session, weightKg, cardioIds)
+  if (e === null || e.total <= 0) return null
+  return { strength: e.strengthKcal, cardio: e.cardioKcal, total: e.total }
 }
 
 // ---------- 该推荐哪一档 ----------

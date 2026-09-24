@@ -1,7 +1,7 @@
 import type { BodyMetric, SetEntry, WorkoutSession } from '../types'
 import { estimate1RM, sessionVolume, setVolume } from './calc'
 import { dateKey, parseDateKey, shiftDays } from './date'
-import { sessionKcalSplit } from './kcal'
+import { roundKcal, sessionKcalSplit } from './kcal'
 
 // ============================================================
 // 把原始记录"算"成图表要用的数据
@@ -482,13 +482,23 @@ function firstOfMonth(now: Date): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1)
 }
 
+// 本周是从哪天算起的（这一周的周一，'2026-09-22' 这种）。
+//
+// 【为什么要单独暴露出来】
+// 统计页那条"看算式"要列出"本周练了哪几次"，必须和 thisWeekKcal
+// 用【同一个起点】。让调用方自己算一遍的话，哪天"一周从周几开始"
+// 这个规矩变了，就会出现"卡片说本周消耗 300，下面的明细只列出 200 的量"。
+export function thisWeekStartKey(): string {
+  return dateKey(mondayOf(new Date()))
+}
+
 // 本周（周一起）消耗了多少
 export function thisWeekKcal(
   sessions: WorkoutSession[],
   weightKg: number | undefined,
   cardioIds: ReadonlySet<string>,
 ): KcalSplit {
-  return kcalInRange(sessions, weightKg, cardioIds, dateKey(mondayOf(new Date())))
+  return kcalInRange(sessions, weightKg, cardioIds, thisWeekStartKey())
 }
 
 // 本月（1 号起）消耗了多少
@@ -539,11 +549,17 @@ export function weeklyKcal(
       strength += split.strength
       cardio += split.cardio
     }
-    // 抹成整数：这是估算，小数点后几位没有任何意义
+    // 抹到 10 —— 和页面上别处显示热量用的是同一个 roundKcal。
+    //
+    // ★ 2026-09-24 改的。原来这里是 Math.round（抹成整数），
+    //   结果同一个页面上出现两种精度：上面的卡片写"约 110 千卡"，
+    //   这张图的「看数字」表里写 113 —— 看着像哪里算错了。
+    //   改在数据这一层，柱子高度、鼠标提示、看数字表、纵轴刻度
+    //   全部一起统一，不会再各说各话。
     points.push({
       label: shortLabel(startKey),
-      strength: Math.round(strength),
-      cardio: Math.round(cardio),
+      strength: roundKcal(strength),
+      cardio: roundKcal(cardio),
     })
   }
   return points
