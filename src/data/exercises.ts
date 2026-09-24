@@ -35,6 +35,23 @@ import type { Exercise, ExerciseKind } from '../types'
 // 就会有"改了这边忘了那边"的隐患 —— 提成常量，两处一定同步。
 export const OUTDOOR_RUN_ID = 'cardio-outdoor-run'
 
+// 跑步类的动作（户外跑 + 跑步机）。
+//
+// 【哪两个地方要用它】
+//   1. 有氧录入表单：只有跑步类才显示"配速"那一栏
+//      （你骑车、划船不会去想"每公里几分钟"）
+//   2. 热量估算：只有跑步类的 MET 是按速度查表的
+//      （其余有氧动作各有一个固定值，因为它们的强度不跟速度走）
+//
+// 提成常量放在这里，是为了让这两处永远同步 —— 哪天加了别的跑步动作
+// （比如"越野跑"），改这一个地方就够了，不会漏掉另一处。
+export const TREADMILL_ID = 'cardio-treadmill'
+
+export const RUNNING_IDS: ReadonlySet<string> = new Set([
+  OUTDOOR_RUN_ID,
+  TREADMILL_ID,
+])
+
 export const PRESET_EXERCISES: Exercise[] = [
   // ---------------- 胸（20 个）----------------
   //
