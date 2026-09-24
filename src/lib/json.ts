@@ -20,6 +20,8 @@ import {
   writeTemplates,
 } from './storage'
 import { dateKey } from './date'
+import { saveTextFile } from './savefile'
+import type { SaveOutcome } from './savefile'
 
 // ============================================================
 // 备份的导出与导入
@@ -70,28 +72,25 @@ export function buildBackup(): Backup {
 }
 
 // ---------- 导出：生成一个文件让用户存起来 ----------
-
-export function downloadBackup(): void {
-  const backup = buildBackup()
-
+//
+// ★ 2026-09-24 改过一次，改的原因值得记着：
+//
+// 原来这里写的是"造个临时文件、替你点一下链接"——网页版的经典写法，
+// 在电脑浏览器里好使，在【安卓 App 里完全没用】。
+// 安卓的 WebView 天生不会下载文件，得 App 自己接一根管子才行，
+// 而 Capacitor 没接。结果就是：点了导出、界面跳出"已导出"，
+// 手机上却【任何地方都没有那个文件】，而且没有任何报错。
+//
+// 现在把"写文件"这件事整个交给 lib/savefile.ts，
+// 它在手机上会写成真文件 + 调起系统分享面板，在网页上还走老路。
+// 这里只管"备份里装什么内容"，不管"文件怎么落地"。
+export async function downloadBackup(): Promise<SaveOutcome> {
   // 第二个参数 null、第三个参数 2 的意思是"缩进两格"，
   // 这样导出的文件是人能读的格式，而不是挤成一坨
-  const text = JSON.stringify(backup, null, 2)
+  const text = JSON.stringify(buildBackup(), null, 2)
 
-  // 浏览器里"凭空造一个文件"的标准三步：
-  //   1. 把文字包成 Blob（可以理解成"内存里的一个文件"）
-  //   2. 给它生成一个临时网址
-  //   3. 造一个隐藏的下载链接，替你点一下
-  const blob = new Blob([text], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `nanofit-${dateKey()}.json`
-  link.click()
-
-  // ★必须调用，否则这个临时网址会一直占着内存不释放
-  URL.revokeObjectURL(url)
+  // 文件名带上日期：存好几个备份之后，一眼能看出哪个是哪天的
+  return saveTextFile(`nanofit-${dateKey()}.json`, text)
 }
 
 // ---------- 导入：从文件恢复 ----------

@@ -12,6 +12,7 @@ import {
   sendTestNotification,
   subscribeRestNotify,
 } from '../lib/restnotify'
+import { isOnPhone } from '../lib/savefile'
 import { readSettings, writeSettings } from '../lib/storage'
 import { applyTheme } from '../lib/theme'
 import { textToNumber } from '../lib/calc'
@@ -128,11 +129,36 @@ export function SettingsScreen() {
   const [importMessage, setImportMessage] = useState('')
   const [importOk, setImportOk] = useState(false)
 
-  function handleExport() {
-    downloadBackup()
+  // 导出备份。
+  //
+  // ★ 2026-09-24 重写的，原因值得记着：
+  //   原来这里是"点一下、立刻说'已导出'"。那句话在手机上是【假的】——
+  //   安卓的 WebView 根本不会下载文件，点了等于什么都没发生，
+  //   而界面上照样说导出成功。详见 lib/savefile.ts 顶部那段。
+  //
+  //   现在它真的会去写文件、调起系统分享面板，所以这里要【等结果】，
+  //   并且按结果说实话 —— 用户取消了就别说成功，失败了也别瞒着。
+  async function handleExport() {
+    setImportMessage('') // 先清掉上一次的话，免得两次看串了
+
+    const outcome = await downloadBackup()
+
+    if (outcome === 'cancelled') {
+      setImportOk(false)
+      setImportMessage('你关掉了分享面板，这次没存下来。想存的话再点一次。')
+      return
+    }
+    if (outcome === 'failed') {
+      setImportOk(false)
+      setImportMessage('导出失败了。数据还在手机里，没丢 —— 先把这个情况告诉我。')
+      return
+    }
+
     setImportOk(true)
     setImportMessage(
-      '已导出。手机上在「文件」App 里，电脑上在「下载」文件夹里。建议顺手发一份到微信收藏。',
+      isOnPhone()
+        ? '分享面板已经打开了 —— 要选「保存到文件」或者发到微信收藏，才算真存下来。'
+        : '已导出，在浏览器的「下载」里。',
     )
   }
 
