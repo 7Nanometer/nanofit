@@ -74,6 +74,40 @@ function lastCompletedAt(entries: SetEntry[]): string | undefined {
   return entries[entries.length - 1]?.completedAt
 }
 
+// ---------- 练完忘了点"结束训练" ----------
+//
+// 一场训练超过这个时长，就认为不正常 —— 多半是练完直接走了，
+// 隔了很久才想起来打开 App 点结束。
+//
+// 【为什么是 6 小时】
+// 力量训练正常也就 1-2 小时，加上热身和组间闲聊，撑死 3 小时。
+// 6 小时这个门槛碰不到任何一个真实训练，但一定挡得住"隔了一夜"。
+//
+// 【★ 为什么按时长判，不按"是不是跨天"判】
+// 只看"开始日期是不是今天"会漏掉一种情况：
+// 早上 8 点开练、当天晚上 8 点才打开 App —— 开始日期还是今天，
+// 但照样会记成 12 小时。按时长判，两种都抓得到。
+//
+// 【超时了怎么办：不截断，换成"最后一组"当结束】
+// 见 TrainScreen 的 completedSession()。这里只负责"判是不是超了"，
+// 不负责改数 —— 把一个真实时长硬砍成 6 小时是**编数据**，
+// 而"你最后一组记到几点，就算到几点"是有据可查的。
+export const SESSION_STALE_MAX_SEC = 6 * 3600
+
+// 这次训练是不是"开始太久了"（多半忘了点结束）。
+// nowISO 不传就用此刻。开始时间都取不到（既没 startedAt 也没记录）返回 false。
+export function isStaleSession(
+  session: WorkoutSession,
+  nowISO?: string,
+): boolean {
+  const start = session.startedAt ?? firstCompletedAt(session.entries)
+  if (start === undefined) return false
+
+  const sec = secondsBetween(start, nowISO ?? new Date().toISOString())
+  if (sec === null) return false
+  return sec > SESSION_STALE_MAX_SEC
+}
+
 // ---------- 力量档位 ----------
 //
 // 四档，MET 值来自 Compendium 官方表里"抗阻训练"那几行。

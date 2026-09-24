@@ -12,7 +12,7 @@ import type {
 import { cardioIdSet, exerciseKind, mergeExercises } from '../data/exercises'
 import { registerBackHandler } from '../lib/backbutton'
 import { newId } from '../lib/id'
-import { formatDateCN, todayKey } from '../lib/date'
+import { dateKey, formatDateCN, formatTimeCN, parseISO, todayKey } from '../lib/date'
 import {
   describeCardio,
   formatDuration,
@@ -22,6 +22,7 @@ import {
 import { unlockAudio } from '../lib/beep'
 import {
   DEFAULT_MET_LEVEL,
+  isStaleSession,
   recommendMetLevel,
   resolveWeightKg,
   sessionSeconds,
@@ -228,6 +229,13 @@ export function TrainScreen() {
     level: DEFAULT_MET_LEVEL,
     reason: '',
   })
+
+  // 点"结束训练"那一刻冻结下来的结束时刻。null = 还没点过。
+  //
+  // 【为什么是个专门的状态，而不是用的时候现读表】
+  // 选档面板打开之后用户可能磨蹭几分钟。现读表的话，"面板上显示的时长"
+  // 和"最后存进去的时长"就会差那几分钟。冻结一次，两处都用它。
+  const [finishEndISO, setFinishEndISO] = useState<string | null>(null)
 
   // "上次用的档位"，面板上那个「沿用上次」按钮要用。undefined = 从来没选过。
   //
@@ -475,9 +483,26 @@ export function TrainScreen() {
     clearActiveWorkout()
     setSession(null)
     setRestEndsAt(null)
+    // 顺手把冻结的结束时刻也清掉，下一场训练重新冻结
+    setFinishEndISO(null)
     // 和 clearRest 同理：训练都结束了，系统里那条预约也必须撤掉，
     // 不然你收拾东西走出健身房，手机还在包里响个不停
     syncRestNotify()
+  }
+
+  // ---------- 丢掉这次"忘了结束"的训练 ----------
+  //
+  // 和"清空"是两回事：清空针对的是刚新建、还没记东西的会话；
+  // 这个是已经记了一堆组、但明显不是今天练的了。
+  // 所以必须先问一句 —— 删掉就找不回来了。
+  function discardStaleSession() {
+    const confirmed = window.confirm(
+      '丢掉这次训练？\n\n' +
+        '已经记的那些组会一起删掉，找不回来。\n' +
+        '如果其实是想把它存下来，点"取消"，改用「结束这次训练」。',
+    )
+    if (!confirmed) return
+    endSession()
   }
 
   // ---------- 结束训练 ----------
@@ -493,13 +518,29 @@ export function TrainScreen() {
     // 练了力量 → 弹强度选择面板。它顺便代替了原来的"确定要结束吗"。
     // 为什么要问：同样练 1 小时，轻重量和大重量的热量能差一倍
     // （MET 3.0 对 6.0），而系统只能从数据里猜，看不见"你今天状态不好"。
+    // ★★ 冻结"结束时刻"：整个流程只在这一行读一次表。
+    //
+    // 【为什么必须冻结】
+    // 面板打开之后用户可能磨蹭几分钟才点"结束训练"。如果面板上显示的时长是
+    // "打开那一刻算的"、最后落盘的是"点确定那一刻算的"，两个数就会差几分钟 ——
+    // 用户看到的和存进去的不一样。（这是"推荐时长 ≠ 落盘时长"那个老坑的同一类，
+    // 上次为了 30 分钟那条分界线已经踩过一次。）
+    //
+    // 下一行的 Date.now() 是安全的：只有用户点"结束训练"那一刻才执行，
+    // 属于事件处理，不是渲染过程。oxlint 分不清这两者，所以显式忽略。
+    // oxlint-disable-next-line react/purity
+    const endISO = new Date().toISOString()
+    setFinishEndISO(endISO)
+
     if (strengthEntries.length > 0) {
       // ★ 用 completedSession() 补好时长再推荐 —— 这样推荐和落盘
       //   用的是同一个时长，不会在 30 分钟这种分界线上打架
-      setRecommendation(recommendMetLevel(completedSession(session), cardioIds))
-        // 顺便把"上次用的档位"现读一份，给面板上的「沿用上次」按钮。
-        // 用 readSettings() 而不是上面那个 settings state —— 后者可能已经过时。
-        setLastMetLevel(readSettings().lastMetLevel)
+      setRecommendation(
+        recommendMetLevel(completedSession(session, endISO), cardioIds),
+      )
+      // 顺便把"上次用的档位"现读一份，给面板上的「沿用上次」按钮。
+      // 用 readSettings() 而不是上面那个 settings state —— 后者可能已经过时。
+      setLastMetLevel(readSettings().lastMetLevel)
       setMetPickerOpen(true)
       return
     }
@@ -509,7 +550,9 @@ export function TrainScreen() {
       `结束今天的训练吗？\n\n${finishSummary}，会存进历史记录。`,
     )
     if (!confirmed) return
-    saveWorkout(undefined)
+    // 这里必须把 endISO 显式传下去：下面那个 setFinishEndISO 是异步的，
+    // 同一个事件处理函数里紧接着读 finishEndISO 还是**旧值**。
+    saveWorkout(undefined, endISO)
   }
 
   // ---------- 把"正在进行的那份"补成"可以存的那份" ----------
@@ -523,24 +566,52 @@ export function TrainScreen() {
   // 同样的组数时长会短一大截，热量会严重高估。所以必须含组间休息。
   //
   // ★ 推荐档位和落盘都走这一个函数，保证两处用的是同一个时长口径。
-  function completedSession(s: WorkoutSession): WorkoutSession {
+  //
+  // ★★ endISO 由调用方传进来（点"结束训练"那一刻冻结的时刻），
+  //    不在这里现读表。原因见下面 finishEndISO 的注释 —— 面板开着的时候
+  //    用户可能磨蹭几分钟，现读表会让"显示的数"和"存的数"对不上。
+  function completedSession(
+    s: WorkoutSession,
+    endISO: string,
+  ): WorkoutSession {
+    // ★ 练完忘了点结束、隔了很久才回来：**不能**把"现在"当结束时刻，
+    //   那会记成十几个小时（实测：隔一夜 = 20 小时 = 约 8000 千卡）。
+    //
+    //   超时的时候，结束时刻改成"最后一组的完成时间" ——
+    //   有据可查，不是拍脑袋截断。这也是为什么不在别处硬砍成 6 小时：
+    //   砍掉的那几个小时是编出来的，而"你最后一组记到几点"是你自己记的。
+    //
+    //   传 undefined 给 sessionSeconds 就等于"用最后一组"（它本来就这样兜底）。
+    const stale = isStaleSession(s, endISO)
     return {
       ...s,
-      // 传"现在"进去，拿到的是从开始到此刻的整场时长（含组间休息）。
       // 算不出来时保留原值（多半本来是 undefined，界面会显示"—"，不会崩）。
       durationSec:
-        sessionSeconds(s, new Date().toISOString()) ?? s.durationSec,
+        sessionSeconds(s, stale ? undefined : endISO) ?? s.durationSec,
     }
   }
 
   // ---------- 真正落盘 ----------
   //
   // metLevel 为 undefined 表示"这次没有力量训练"，没有档位可记。
-  function saveWorkout(metLevel: StrengthMetLevel | undefined) {
+  //
+  // endISO 一般不用传：finishWorkout() 已经把它冻进 finishEndISO 了，
+  // 面板上点"结束训练"时那个 state 早就更新过了。
+  // 只有"纯有氧"那条路要在同一个事件处理函数里接着落盘，那时 state 还没生效，
+  // 所以它会把 endISO 显式传进来。
+  function saveWorkout(
+    metLevel: StrengthMetLevel | undefined,
+    endISO?: string,
+  ) {
     if (!session) return
 
+    // 兜底的 new Date() 只在"两条路都没给 endISO"时才会走到，
+    // 而正常流程里 finishWorkout() 一定已经给过了 —— 留着是为了万一。
+    // oxlint-disable-next-line react/purity
+    const end = endISO ?? finishEndISO ?? new Date().toISOString()
+
     const finished: WorkoutSession = {
-      ...completedSession(session),
+      ...completedSession(session, end),
       // 用展开语法按条件加字段，而不是写 metLevel: metLevel ——
       // 后者会在纯有氧时写出一个 metLevel: undefined 的键，
       // 虽然读出来一样，但存进 json 会多一行没意义的空字段
@@ -575,6 +646,21 @@ export function TrainScreen() {
     endSession()
     setMetPickerOpen(false)
   }
+
+  // ---------- 练完忘了点"结束训练"？----------
+  //
+  // 判据是"从开始到现在超过 6 小时"（见 lib/kcal.ts 的 isStaleSession）。
+  //
+  // ★ 为什么按**时长**判，不按"开始日期是不是今天"判：
+  //   早上 8 点开练、当天晚上 8 点才打开 App —— 开始日期还是今天，
+  //   但照样会记成 12 小时。按时长判，两种都抓得到。
+  //
+  // 只在**有记录**时才提示：一组都没记的话，正常那个"清空"按钮就够了，
+  // 而且那种会话本来就会被丢弃、不会进历史。
+  const staleStartISO = session?.startedAt ?? entries[0]?.completedAt
+  const staleLastISO = entries[entries.length - 1]?.completedAt
+  const showStaleWarning =
+    session !== null && entries.length > 0 && isStaleSession(session)
 
   // ---------- 休息倒计时下面那行小字 ----------
   //
@@ -619,6 +705,46 @@ export function TrainScreen() {
           </button>
         )}
       </div>
+
+      {/* ---------- 练完忘了点"结束训练"（★ 2026-09-24 加的）----------
+          这条必须说清楚，因为系统接下来做的事和用户以为的不一样：
+          结束时刻会按"最后一组"算，而不是"现在"。不说的话，
+          用户会以为自己的训练时长被系统擅自改短了。 */}
+      {showStaleWarning && (
+        <div className="mb-3 rounded-xl border border-brand bg-brand/10 p-3">
+          <div className="text-sm font-medium text-brand">
+            这次训练从 {formatMoment(staleStartISO ?? '')} 就开始了
+          </div>
+          <p className="mt-1 text-xs text-ink-2">
+            多半是练完忘了点「结束训练」。
+            <br />
+            要是把"现在"当成结束时刻，这一场会被记成十几个小时、热量也跟着离谱。
+            <br />
+            所以这次
+            <span className="font-semibold">不按现在算</span>
+            {staleLastISO !== undefined && (
+              <>，改按你最后一组的时间（{formatMoment(staleLastISO)}）算。</>
+            )}
+            {staleLastISO === undefined && '。'}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={finishWorkout}
+              className="min-h-11 flex-1 rounded-lg bg-brand px-3 text-sm font-semibold text-on-brand"
+            >
+              结束这次训练
+            </button>
+            <button
+              type="button"
+              onClick={discardStaleSession}
+              className="min-h-11 shrink-0 rounded-lg border border-line px-3 text-sm text-ink-2"
+            >
+              丢弃
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ---------- 存不进去时的警告 ---------- */}
       {storageError && (
@@ -916,4 +1042,17 @@ function ExerciseCard({
       )}
     </div>
   )
+}
+
+// ISO 时刻 → "9月21日 周一 14:00"。
+//
+// 【为什么要精确到分钟】"忘了点结束训练"那条提示里最关键的信息就是
+// "系统打算按哪个时刻算" —— 只给到日期，用户没法判断对不对。
+//
+// 注意传进来的是**时刻**（'2026-09-21T14:00:00.000Z'）不是日期，
+// 所以解析用 parseISO（Date.parse），不能用 parseDateKey。
+function formatMoment(iso: string): string {
+  const ms = parseISO(iso)
+  if (Number.isNaN(ms)) return '（时间读不出来）'
+  return `${formatDateCN(dateKey(new Date(ms)))} ${formatTimeCN(iso)}`
 }

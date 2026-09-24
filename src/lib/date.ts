@@ -59,6 +59,22 @@ export function formatDateCN(key: string): string {
   return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK_NAMES[d.getDay()]}`
 }
 
+// ISO 时刻 → "15:20"，给人看的时分。
+//
+// 【为什么单独写一个】
+// formatDateCN 只给到"9月24日 周四"，而"你最后一组记到几点"必须精确到分钟 ——
+// 那正是"忘了点结束"那条提示里最关键的信息（用户靠它判断系统打算怎么算）。
+//
+// 传进来的不是日期（'2026-09-24'）而是时刻（'2026-09-24T15:20:00.000Z'），
+// 所以解析要用 parseISO，不能用 parseDateKey（那个会把 ISO 串切坏）。
+export function formatTimeCN(iso: string): string {
+  const d = new Date(parseISO(iso))
+  if (Number.isNaN(d.getTime())) return ''
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
 // 判断某个日期是不是今天。训练页用它来决定显示"今天"还是具体日期。
 export function isToday(key: string): boolean {
   return key === todayKey()
