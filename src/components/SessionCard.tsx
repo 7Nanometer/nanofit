@@ -2,7 +2,7 @@ import type { Exercise, SetEntry, WorkoutSession } from '../types'
 import { cardioIdSet, exerciseName } from '../data/exercises'
 import { formatDateCN } from '../lib/date'
 import { describeCardio, formatDuration, sessionVolume } from '../lib/calc'
-import { formatKcal, sessionKcal } from '../lib/kcal'
+import { formatKcal, metLabel, sessionKcal, sessionSeconds } from '../lib/kcal'
 
 // ============================================================
 // 历史记录里的一条
@@ -69,12 +69,42 @@ export function SessionCard({
     summaryParts.push(`有氧 ${formatDuration(cardioSeconds)}`)
   }
 
+  // ---------- 第二行：时长 · 档位 · 热量（★ 2026-09-24 加的）----------
+  //
+  // 【为什么档位必须显示出来】
+  // 整个界面以前**从来不显示**它 —— 存了哪一档，用户无从核对。
+  // 有人对着统计页的 113 千卡怎么算都对不上，只能来问为什么。
+  // 而档位恰恰是热量公式里最大的变量（3.0 和 6.0 差一倍），
+  // 它必须看得见，用户才能自己发现问题。
+  //
+  // 【为什么单独占一行，而不是接在上面那行后面】
+  // 实测过 375px 手机宽度：接在后面会挤成两行，而且中文会在
+  // "低/强度"这种地方硬断开，很难看。单开一行还有个好处 ——
+  // 这三样正好就是热量公式的三个输入（档位 × 时长 → 热量），
+  // 排在一起，用户一眼就能核对。
+  const detailParts: string[] = []
+
+  // 【为什么只在有力量记录时显示时长和档位】
+  // 纯有氧的场次：上面已经写了"有氧 30 分钟"，再写一遍总时长是重复的；
+  // 而且纯有氧压根不存档位（用不上那个概念）。
+  if (strengthEntries.length > 0) {
+    const durationSec = sessionSeconds(session)
+    if (durationSec !== null) {
+      detailParts.push(formatDuration(durationSec))
+    }
+    // 【老记录会怎样】那时候还没开始存档位，这个字段是空的 ——
+    // 那就整个不出现，和下面"热量算不出来就不显示"一个规矩：
+    // 没有的数据不占位置，绝不写"—"占位。
+    if (session.metLevel !== undefined) {
+      detailParts.push(metLabel(session.metLevel))
+    }
+  }
+
   // 消耗热量（估算）。算不出来时这一项**整个不出现** ——
-  // 和上面那些项目一个规矩：没有的数据不占位置，更不写"—"占位。
   // 老记录尤其会走这条路：那时候还没开始记训练时长。
   const kcal = sessionKcal(session, weightKg, cardioIds)
   if (kcal !== null) {
-    summaryParts.push(formatKcal(kcal))
+    detailParts.push(formatKcal(kcal))
   }
 
   return (
@@ -95,6 +125,12 @@ export function SessionCard({
         <div className="mt-1 text-sm text-muted">
           {summaryParts.join(' · ')}
         </div>
+        {/* 第二行小一号 —— 它是"这次怎么算的"，不是"练了什么" */}
+        {detailParts.length > 0 && (
+          <div className="mt-0.5 text-xs text-muted">
+            {detailParts.join(' · ')}
+          </div>
+        )}
       </button>
 
       {/* ---------- 点开后的样子 ---------- */}

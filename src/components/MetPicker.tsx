@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { StrengthMetLevel } from '../types'
-import { STRENGTH_MET_INFO } from '../lib/kcal'
+import { STRENGTH_MET_INFO, metLabel } from '../lib/kcal'
 
 // ============================================================
 // 结束训练时问一句"这次练得有多累"
@@ -58,12 +58,6 @@ type Props = {
   onCancel: () => void
 }
 
-// 把代号翻成"高强度 6.0"这种给人看的字
-function labelOf(level: StrengthMetLevel): string {
-  const info = STRENGTH_MET_INFO.find((x) => x.key === level)
-  return info === undefined ? level : `${info.label} ${info.met.toFixed(1)}`
-}
-
 export function MetPicker({
   recommended,
   reason,
@@ -103,7 +97,7 @@ export function MetPicker({
         {/* ---------- 系统建议（整块，不是小标签）---------- */}
         <div className="mb-3 rounded-lg border border-brand bg-brand/10 p-3">
           <div className="text-sm font-medium text-ink">
-            系统建议：{labelOf(recommended)}
+            系统建议：{metLabel(recommended)}
           </div>
           {reason !== '' && (
             <div className="mt-0.5 text-xs text-ink-2">依据：{reason}</div>
@@ -150,7 +144,7 @@ export function MetPicker({
                 自作主张地塞空格或吃掉空格（引号「」里多一个空格很扎眼）。
                 强调"你选的"要用 span + CSS —— 这里写 markdown 的星号
                 会被原样显示出来，因为这个面板是 JSX 不是 markdown */}
-            {`你选的是「${labelOf(level)}」，和系统建议的「${labelOf(recommended)}」不一样。热量会按`}
+            {`你选的是「${metLabel(level)}」，和系统建议的「${metLabel(recommended)}」不一样。热量会按`}
             <span className="font-semibold">你选的</span>
             这一档算。
           </p>
@@ -169,7 +163,7 @@ export function MetPicker({
             onClick={() => setLevel(lastLevel)}
             className="mb-3 min-h-11 w-full rounded-lg border border-line px-3 text-sm text-ink-2"
           >
-            沿用上次：{labelOf(lastLevel)}
+            沿用上次：{metLabel(lastLevel)}
           </button>
         )}
 

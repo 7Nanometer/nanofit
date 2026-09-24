@@ -107,6 +107,20 @@ export function metOf(level: StrengthMetLevel): number {
   return STRENGTH_MET_INFO.find((x) => x.key === level)?.met ?? 3.5
 }
 
+// 把档位写成给人看的字，如"低强度 3.0"。
+//
+// 【为什么不只写中文名，也不只写代号】
+// 只写"低强度"，用户没法核对自己算的数（公式里用的是 3.0）；
+// 只写"low"，那是给电脑看的。两个一起给才既能读又能算。
+//
+// 【为什么放在这里而不是各个界面各写一份】
+// 历史页和选档面板都要用。抄两遍的话，哪天想改说法（比如觉得
+// "低强度"不如"轻松"准确）就得记着改两处 —— 一定会漏。
+export function metLabel(level: StrengthMetLevel): string {
+  const info = STRENGTH_MET_INFO.find((x) => x.key === level)
+  return info === undefined ? level : `${info.label} ${info.met.toFixed(1)}`
+}
+
 // 老记录没有 metLevel 字段时用哪一档。
 // 选"中等"是因为它是最常见的那种训练强度，猜错的代价最小。
 export const DEFAULT_MET_LEVEL: StrengthMetLevel = 'moderate'
