@@ -75,6 +75,14 @@ export const EQUIPMENTS = [
 
 export type Equipment = (typeof EQUIPMENTS)[number]
 
+// 判断"某个器械是不是标准词表里的"。
+//
+// 【为什么要单独做一份 Set】
+// 数组的 includes 得从头翻到尾，而且 EQUIPMENTS 是字面量元组，
+// 拿一个普通的 string 去 includes 会因类型不匹配而报错。
+// 用 Set<string> 查找快，也顺手绕开了那个类型问题。
+export const EQUIPMENT_SET: ReadonlySet<string> = new Set(EQUIPMENTS)
+
 // 动作的两大类。
 //
 // ★ 这个字段是**可选**的，老数据里根本没有（那时只有力量动作）。

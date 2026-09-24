@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MUSCLE_GROUPS, MUSCLE_LABELS } from '../types'
+import { EQUIPMENTS, EQUIPMENT_SET, MUSCLE_GROUPS, MUSCLE_LABELS } from '../types'
 import type { Exercise, MuscleGroup } from '../types'
 import { PRESET_EXERCISES, mergeExercises } from '../data/exercises'
 import { readCustomExercises, writeCustomExercises } from '../lib/storage'
@@ -15,8 +15,16 @@ import { ExerciseForm } from '../components/ExerciseForm'
 //   自建的：存在浏览器储物柜里，打开这个页面时读出来
 // ============================================================
 
-// 筛选条上的选项。除了 6 个肌群，还多一个 'all'（全部）
+// 肌群筛选条上的选项。除了 8 个肌群，还多一个 'all'（全部）
 type Filter = MuscleGroup | 'all'
+
+// 器械筛选条上"其他"那个按钮的内部代号。
+//
+// 【为什么不用中文"其他"当代号】
+// 万一以后真有人把某个动作的器械填成"其他"，代码里就分不清
+// "用户点了其他按钮"和"这个动作的器械叫其他"了。
+// 用一对下划线包起来，跟任何正常的器械名都不会撞。
+const OTHER_EQUIP = '__other__'
 
 export function LibraryScreen({ onBack }: { onBack: () => void }) {
   // useState(函数) 这种写法表示："只在第一次显示这个页面时读一次储物柜"。
@@ -25,6 +33,7 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
 
   const [keyword, setKeyword] = useState('') // 搜索框里打的字
   const [filter, setFilter] = useState<Filter>('all') // 当前选中的肌群
+  const [equipFilter, setEquipFilter] = useState('all') // 当前选中的器械
   const [expandedId, setExpandedId] = useState<string | null>(null) // 哪个动作被点开了
   const [isCreating, setIsCreating] = useState(false) // 新建弹窗要不要显示
   const [storageError, setStorageError] = useState(false) // 存不进去时的红色提示
@@ -32,12 +41,31 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
   // 预置的 + 自建的，合成一个总列表
   const all = mergeExercises(custom)
 
-  // 按搜索词和肌群过一遍，得到最终要显示的列表
+  // 有没有"器械不在标准词表里"的动作？
+  //
+  // 【为什么要在意这个】
+  // 老版本允许自由填器械，以前建的自建动作里可能存着"龙门架"这种词。
+  // 那种动作在任何器械按钮下都点不出来 —— 看着像丢了。
+  // 所以真有的话，就多长一个"其他"按钮把它们兜住。
+  const hasOtherEquip = all.some((item) => !EQUIPMENT_SET.has(item.equipment))
+
+  // 按搜索词、肌群、器械过三遍，得到最终要显示的列表。
+  // 三个条件是"而且"的关系：选"胸" + "哑铃"，看的是"用哑铃练胸的动作"。
   const kw = keyword.trim()
   const list = all.filter((item) => {
     if (filter !== 'all' && item.muscleGroup !== filter) return false
+
+    if (equipFilter !== 'all') {
+      if (equipFilter === OTHER_EQUIP) {
+        if (EQUIPMENT_SET.has(item.equipment)) return false
+      } else if (item.equipment !== equipFilter) {
+        return false
+      }
+    }
+
     if (kw === '') return true
-    // includes 的意思是"包含"。搜"卧推"能命中"杠铃卧推"和"上斜哑铃卧推"
+    // includes 的意思是"包含"。搜"卧推"能命中"杠铃卧推"和"上斜哑铃卧推"；
+    // 搜"哑铃"也行 —— 因为器械名也在这句话里跟着比
     return item.name.includes(kw) || item.equipment.includes(kw)
   })
 
@@ -88,7 +116,7 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
 
       {/* ---------- 肌群筛选条 ---------- */}
       {/* overflow-x-auto = 选项太多时可以左右滑动，不会挤成两行 */}
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
         <FilterChip
           label="全部"
           active={filter === 'all'}
@@ -102,6 +130,33 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
             onClick={() => setFilter(group)}
           />
         ))}
+      </div>
+
+      {/* ---------- 器械筛选条 ----------
+          和上面那条肌群筛选是"叠加"关系：选"胸" + "哑铃" = 哑铃练胸的动作。
+          两条可以同时生效，再叠加搜索框里打的字。 */}
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        <FilterChip
+          label="全部器械"
+          active={equipFilter === 'all'}
+          onClick={() => setEquipFilter('all')}
+        />
+        {EQUIPMENTS.map((equip) => (
+          <FilterChip
+            key={equip}
+            label={equip}
+            active={equipFilter === equip}
+            onClick={() => setEquipFilter(equip)}
+          />
+        ))}
+        {/* 只有真的存在"非标准器械"的动作时才出现，见上面 hasOtherEquip 的说明 */}
+        {hasOtherEquip && (
+          <FilterChip
+            label="其他"
+            active={equipFilter === OTHER_EQUIP}
+            onClick={() => setEquipFilter(OTHER_EQUIP)}
+          />
+        )}
       </div>
 
       {/* ---------- 数量提示 ---------- */}
