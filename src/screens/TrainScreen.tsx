@@ -18,6 +18,7 @@ import {
   textToNumber,
 } from '../lib/calc'
 import { unlockAudio } from '../lib/beep'
+import { sessionSeconds } from '../lib/kcal'
 import {
   clearActiveWorkout,
   readActiveWorkout,
@@ -333,13 +334,29 @@ export function TrainScreen() {
     )
     if (!confirmed) return
 
+    // ---------- 补上这次练了多久 ----------
+    //
+    // 【为什么现在才补】
+    // 时长只有到"结束"这一刻才知道。存在 active-workout 里的那份每次点 ✓
+    // 都会被覆盖重写，所以不能提前写；这里算一次、只写进 sessions。
+    //
+    // 【为什么是"整场时长"而不是"做组时长"】
+    // 热量用的 MET 档位是按整场训练的平均强度定的。只算做组时间的话，
+    // 同样的组数时长会短一大截，热量会严重高估。所以必须含组间休息。
+    const finished: WorkoutSession = {
+      ...session,
+      // 传"现在"进去，拿到的是从开始到此刻的整场时长（含组间休息）。
+      // 算不出来时保留原值（多半本来是 undefined，界面会显示"—"，不会崩）。
+      durationSec: sessionSeconds(session, new Date().toISOString()) ?? session.durationSec,
+    }
+
     // 【这里的顺序非常关键，是防丢数据最重要的一处】
     //
     // 必须"先确认存进历史成功了"，才能清空"正在进行"那一格。
     // 如果反过来先清空，万一存历史失败（比如手机存储满了），
     // 这次训练就两头都没了 —— 彻底丢失，找不回来。
     const others = readSessions().filter((s) => s.date !== session.date)
-    const saved = writeSessions([...others, session])
+    const saved = writeSessions([...others, finished])
     if (!saved) {
       setStorageError(true)
       // 故意不清空：数据还留在"正在进行"里，你稍后存储恢复了还能再点一次

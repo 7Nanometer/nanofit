@@ -63,3 +63,34 @@ export function formatDateCN(key: string): string {
 export function isToday(key: string): boolean {
   return key === todayKey()
 }
+
+// ---------- 算两个"绝对时刻"之间差了多少 ----------
+//
+// 【它和上面那些函数的区别，一定要看清】
+// 上面处理的都是 '2026-09-23' 这种**日期**（一天，不是一个时刻）。
+// 这个处理的是一串 ISO 时间，长这样：'2026-09-24T06:32:10.123Z'
+// —— 它记的是"几点几分几秒"，是一个**绝对时刻**。
+//
+// 训练记录里存的时间（startedAt、completedAt）全是 ISO 格式，
+// 因为它们要能算出"这一组和上一组隔了多久"。
+//
+// ★ 千万别拿 parseDateKey 去解析 ISO 字符串！
+//   它按横线切开后取第三段，会把 '24T06:32:10.123Z' 变成 NaN。
+//   解析 ISO 只有一个正确做法：Date.parse()。
+export function parseISO(iso: string): number {
+  return Date.parse(iso)
+}
+
+// 从 fromISO 到 toISO 过了多少秒。算不出来（格式不对、缺字段）返回 null。
+//
+// 【为什么返回 null 而不是 0】
+// 和体脂率、配速那边一个道理：0 是个**假数字**。
+// "这次训练 0 秒"和"不知道练了多久"是两回事，混在一起会让热量算出个 0。
+export function secondsBetween(fromISO: string, toISO: string): number | null {
+  const from = parseISO(fromISO)
+  const to = parseISO(toISO)
+  // Number.isNaN 用来判断"这不是个有效数字"。
+  // 注意不能写 from === NaN —— NaN 和任何东西比都是 false，包括它自己。
+  if (Number.isNaN(from) || Number.isNaN(to)) return null
+  return (to - from) / 1000
+}

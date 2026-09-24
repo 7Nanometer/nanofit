@@ -35,14 +35,15 @@
 ## 数据模型
 
 Exercise { id, name, muscleGroup, equipment, isCustom, kind?, note? }
-SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt, durationSec?, distanceM? }
-WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec? }
+SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt, durationSec?, distanceM?, kcal? }
+WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec?, startedAt?, metLevel? }
 Template { id, name, items: { exerciseId, targetSets, targetReps }[] }
 BodyMetric { date, weightKg, heightCm?, bodyFat?, bodyFatSource? }
-Settings { restSec, rpeEnabled, sex?, birthYear?, theme? }
+Settings { restSec, rpeEnabled, sex?, birthYear?, theme?, defaultWeightKg?, lastMetLevel? }
 
 肌群 8 个：chest / back / legs / shoulders / arms / core / fullbody / cardio
 器械 8 种：杠铃 / 哑铃 / 史密斯 / 固定器械 / 绳索 / 自重 / 壶铃 / 有氧器械
+力量强度档 4 个：low(3.0) / moderate(3.5) / high(6.0) / circuit(8.0)
 
 2026-09-23 按主人决定：
 - BodyMetric 加 heightCm
@@ -71,6 +72,23 @@ Settings { restSec, rpeEnabled, sex?, birthYear?, theme? }
 - 有氧公式（src/lib/calc.ts）：田径场第 1 道算 400 米，每往外一道 +7 米；
   配速 = 秒 ÷ 公里数。
 - **不做 GPS 定位测距**（主人明确否决：耗电、精度、权限链路，且会偏离"记录本"定位）。
+
+2026-09-24 按主人决定（加热量估算）：
+- ★★★ **界面上一律写"约 XXX 千卡"，绝不写"消耗 523 千卡"。**
+  MET 公式的实测偏差本来就有 10–20%，写成精确数字是在骗人。
+  凡是显示热量的地方，附近必须有"这是估算、不含运动后持续燃烧"的说明。
+- 公式 `消耗 = (MET − 1) × 体重(kg) × 时长(小时)`，减 1 是为了只算
+  "运动额外多消耗的"，不含躺着也要烧的基础代谢。**界面上必须解释这一点**，
+  否则主人拿它跟手环对数字（手环常给总消耗）会困惑。
+- SetEntry 加 kcal?（有氧器械上显示的数值，填了就用它）；力量动作**不开**
+  这个口子 —— 健身房里没哪台器械会告诉你"这次深蹲烧了多少"。
+- WorkoutSession 的 durationSec **从这天起真的写上**（之前是纯占位，
+  全项目零写入零读取）。在 finishWorkout 里写，取"开始 → 点结束那一刻"，
+  ★ 必须含组间休息：MET 档位是按整场平均强度定的，只算做组时间会严重高估。
+- Settings 加 defaultWeightKg? 和 lastMetLevel?。体重优先取 BodyMetric
+  最近一次，都没有才用 defaultWeightKg，再没有就不显示热量。
+- ★ **混合训练的时长要去重**：一次训练里既有力量又有有氧时，
+  力量部分 = 整场时长 − 有氧总时长。直接用整场时长会把跑步那段算两遍。
 
 localStorage 前缀 nanofit:v1:。读写集中在 src/lib/storage.ts。支持导出/导入 JSON。
 

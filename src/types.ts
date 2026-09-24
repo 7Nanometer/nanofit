@@ -138,6 +138,13 @@ export type SetEntry = {
   // 距离（米）。填 5000 就是 5 公里。
   // 可选 —— 跑步机上只看时间不看距离的人可以不填。
   distanceM?: number
+
+  // 有氧器械上显示的消耗热量，想抄就抄在这里。
+  // 填了就用你这个数，不填才用公式估。
+  //
+  // 为什么不给力量训练也开这个口子：健身房里没有哪台器械会告诉你
+  // "这次深蹲消耗了多少"，让手填只会让人瞎编一个数，反而更乱。
+  kcal?: number
 }
 
 // ---------- 计划项（模板里的一行）----------
@@ -150,6 +157,18 @@ export type PlannedItem = {
   targetWeightKg?: number // 可选的预填重量
 }
 
+// ---------- 训练强度档位（热量估算用）----------
+
+// 力量训练没法直接测消耗，只能用 MET 公式推（详见 src/lib/kcal.ts）。
+// MET 是"这段时间里身体在使劲几倍于躺着不动"，这四档是 Compendium
+// 官方表里"抗阻训练"那几行。
+//
+// ★ 这个类型必须定义在 types.ts、而不是 kcal.ts —— 因为它要存进
+//   Settings 和 WorkoutSession，而 types.ts 是全项目"数据形状"的唯一出处。
+export const STRENGTH_MET_LEVELS = ['low', 'moderate', 'high', 'circuit'] as const
+
+export type StrengthMetLevel = (typeof STRENGTH_MET_LEVELS)[number]
+
 // ---------- 一次训练 ----------
 
 export type WorkoutSession = {
@@ -158,11 +177,23 @@ export type WorkoutSession = {
   name?: string // 名字，通常来自模板，如"推日"
   entries: SetEntry[] // 这次训练做的所有组
   note?: string
-  durationSec?: number // 练了多久（秒）
+  // 练了多久（秒）。★从开始到结束的总时长，**含组间休息**。
+  //
+  // 【为什么必须含休息】
+  // 热量用的 MET 档位是按"整场训练的平均强度"定的，不是按单组的强度。
+  // 只算做组时间的话，同样的组数时长会短一大截，MET 会严重高估。
+  //
+  // 2026-09-24 之前这个字段只是个占位，全项目没人写也没人读。
+  // 从这天起在"结束训练"时真的写上了。
+  durationSec?: number
   startedAt?: string // 开始时间，用来算 durationSec
   templateId?: string // 套用的是哪个模板
   plannedItems?: PlannedItem[] // 套用模板后生成的计划清单
   exerciseIds?: string[] // 这次训练包含哪些动作。★数组的先后顺序 = 界面上从上到下的顺序
+
+  // 这次训练算热量用的力量档位。没记过力量（纯有氧）时不会有这个字段。
+  // 老记录也没有 —— 读取时兜底成 undefined，表示"没这个数据"。
+  metLevel?: StrengthMetLevel
 }
 
 // ---------- 训练模板 ----------
@@ -219,6 +250,13 @@ export type Settings = {
   // 存年龄的话，忘了改就会一直用一个偏小的数，算出来的体脂率悄悄偏掉。
   birthYear?: number
   theme?: Theme // 没选过就是 undefined，一律按夜间显示
+
+  // 没在「身体数据」里记过体重时，算热量用这个数。
+  // 记过体重的以「身体数据」里最近那一次为准，这个只在完全没有时兜底。
+  defaultWeightKg?: number
+  // 上次"结束训练"时选的那一档强度。下次默认就用它，
+  // 但界面上仍会标出"根据今天的训练，建议 XX"（详见 lib/kcal.ts）。
+  lastMetLevel?: StrengthMetLevel
 }
 
 // 第一次打开 App 时用的默认设置
