@@ -26,6 +26,7 @@ import {
   resolveWeightKg,
   sessionSeconds,
 } from '../lib/kcal'
+import type { MetRecommendation } from '../lib/kcal'
 import {
   askRestNotifyFirstTime,
   getRestNotifyStatus,
@@ -219,8 +220,14 @@ export function TrainScreen() {
   //   2. ★ 推荐用的时长必须和落盘用的时长是同一个，否则会出现
   //      "建议按 26 分钟算、热量按 31 分钟算"这种自相矛盾 ——
   //      在 30 分钟这个分界线上，差 5 分钟就会推荐错一档。
-  const [recommendedLevel, setRecommendedLevel] =
-    useState<StrengthMetLevel>(DEFAULT_MET_LEVEL)
+  // 存的是"档位 + 为什么"，不只是档位 —— 理由要显示在面板上，
+  // 让人一眼看出系统是**根据什么**建议的（详见 lib/kcal.ts 的 MetRecommendation）。
+  // 初值里的 reason 是空的，但面板只在点过"结束训练"之后才打开，
+  // 那时候它一定已经被真正的推荐结果覆盖了，所以那个空串永远不会显示出来。
+  const [recommendation, setRecommendation] = useState<MetRecommendation>({
+    level: DEFAULT_MET_LEVEL,
+    reason: '',
+  })
 
   // 先存进储物柜，再更新界面。所有改动数据的操作都走这一个出口。
   function persist(next: WorkoutSession) {
@@ -479,7 +486,7 @@ export function TrainScreen() {
     if (strengthEntries.length > 0) {
       // ★ 用 completedSession() 补好时长再推荐 —— 这样推荐和落盘
       //   用的是同一个时长，不会在 30 分钟这种分界线上打架
-      setRecommendedLevel(recommendMetLevel(completedSession(session), cardioIds))
+      setRecommendation(recommendMetLevel(completedSession(session), cardioIds))
       setMetPickerOpen(true)
       return
     }
@@ -717,10 +724,10 @@ export function TrainScreen() {
 
       {metPickerOpen && session !== null && (
         <MetPicker
-          recommended={recommendedLevel}
+          recommended={recommendation.level}
           // 第一次用（没选过）就用推荐值；之后默认用上次选的。
           // 两句话都要满足，所以界面上还会标出"建议"哪一档。
-          defaultLevel={settings.lastMetLevel ?? recommendedLevel}
+          defaultLevel={settings.lastMetLevel ?? recommendation.level}
           summary={finishSummary}
           onConfirm={saveWorkout}
           onCancel={() => setMetPickerOpen(false)}

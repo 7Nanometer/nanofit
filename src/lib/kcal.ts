@@ -359,21 +359,52 @@ export function sessionKcalSplit(
 // 【为什么是写死 id 而不是看重量】
 // 看重量更准，但前提是知道用户的体重和实力 —— 80kg 对新手是极限，
 // 对老手是热身。写死动作名是"保守但不会大错"的做法。
+//
+// ★ 2026-09-24 补过一批。原来的 14 个里 12 个是杠铃，
+//   结果"倒蹬机 90kg×8 练到 RPE 10"这种事系统完全看不见 ——
+//   名字里带"杠铃"才认。现在把固定器械/绳索/史密斯里
+//   **和那些杠铃动作一一对应**的大重量多关节动作补齐。
+//
+// 【判断标准】能上大重量的多关节推 / 拉 / 蹲 / 髋铰链动作。
+// 【有意不加的，免得以后有人问"这个怎么漏了"】
+//   · 单侧单臂变体（单腿腿举、单臂划船、单臂下拉）—— 上不了大重量
+//   · 辅助引体向上 —— 那是"借力做引体"的机器，恰恰是**轻**的信号
+//   · 握法变体（窄距下拉、反握下拉）—— 父类"高位下拉"已覆盖这个动作模式
+//   · 孤立动作（腿屈伸、腿弯举、夹胸、飞鸟、侧平举、弯举、下压、提踵、耸肩）
+//   · 史密斯窄距卧推 —— 能上重量，但目标肌是三头，属于手臂的辅助项
 const HEAVY_COMPOUND_IDS: ReadonlySet<string> = new Set([
-  'bb-squat',
-  'bb-front-squat',
-  'smith-squat',
-  'mach-hack-squat',
-  'bb-deadlift',
-  'bb-rdl',
-  'bb-sumo-deadlift',
-  'bb-trap-bar-deadlift',
-  'bb-bench-press',
-  'bb-incline-bench-press',
-  'bb-decline-bench-press',
-  'bb-overhead-press',
-  'bb-row',
-  'bb-hip-thrust',
+  // ----- 杠铃（原有）-----
+  'bb-squat', // 杠铃深蹲
+  'bb-front-squat', // 前蹲
+  'bb-deadlift', // 硬拉
+  'bb-rdl', // 罗马尼亚硬拉
+  'bb-sumo-deadlift', // 相扑硬拉
+  'bb-trap-bar-deadlift', // 六角杠硬拉
+  'bb-bench-press', // 杠铃卧推
+  'bb-incline-bench-press', // 上斜杠铃卧推
+  'bb-decline-bench-press', // 下斜杠铃卧推
+  'bb-overhead-press', // 杠铃肩上推举
+  'bb-row', // 杠铃划船
+  'bb-hip-thrust', // 臀推
+  // ----- 史密斯 / 固定器械（原有 2 个）-----
+  'smith-squat', // 史密斯深蹲
+  'mach-hack-squat', // 哈克深蹲
+  // ----- 2026-09-24 补的：推胸类 -----
+  'mach-chest-press', // 器械推胸
+  'mach-incline-chest-press', // 上斜器械推胸
+  'smith-bench-press', // 史密斯卧推
+  'smith-incline-press', // 史密斯上斜卧推
+  // ----- 补的：推肩类 -----
+  'mach-shoulder-press', // 坐姿推肩机
+  'smith-shoulder-press', // 史密斯肩上推举
+  // ----- 补的：划船 / 下拉类 -----
+  'mach-seated-row', // 器械坐姿划船
+  'cable-seated-row', // 坐姿绳索划船
+  'mach-high-row', // 器械高位划船
+  'cable-lat-pulldown', // 高位下拉
+  // ----- 补的：腿 / 臀 -----
+  'mach-leg-press', // 腿举（倒蹬）
+  'mach-hip-thrust', // 器械臀推
 ])
 
 // 相邻两组的间隔，取**中位数**（秒）。算不出来返回 null。
@@ -402,37 +433,143 @@ function medianRestSeconds(entries: SetEntry[]): number | null {
   return gaps.length % 2 === 1 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2
 }
 
+// 记了 RPE 的那些组，中间的那个数。一条都没记返回 null。
+//
+// 【RPE 是什么】Reps In Reserve 的变体叫法，这里就是"这一组你觉得有多难"，
+// 1-10 分，10 是"再也做不动了"。它是**用户亲口说的**，
+// 比"组间休息多久""练了哪些动作"这两个间接信号准得多。
+//
+// 【为什么取中位数，不取最大值】
+// 热身组的 RPE 常常只有 5-6。取最大值的话，一次训练里只要有一组冲到 10，
+// 整场就被判成高强度 —— 哪怕剩下十几组都很轻松。
+// 中位数回答的是"这次训练典型有多累"，那才是我们要问的问题。
+//
+// 【为什么丢掉 0 和负数】
+// RPE 是 1-10 的自评，出现 0 或负数说明数据有问题（也可能是手滑输错了），
+// 收进来只会把中位数往下拽。小数（7.5）是允许的，所以不能取整。
+function medianRpe(entries: SetEntry[]): number | null {
+  const values = entries
+    .map((e) => e.rpe)
+    .filter((v): v is number => v !== undefined && v > 0)
+  if (values.length === 0) return null
+
+  values.sort((a, b) => a - b)
+  const mid = Math.floor(values.length / 2)
+  return values.length % 2 === 1
+    ? values[mid]
+    : (values[mid - 1] + values[mid]) / 2
+}
+
+// ---------- 推荐档位用到的几个门槛 ----------
+//
+// 【为什么都提出来当常量，而不是散在判断里写字面量】
+// 这几个数字是**判断标准**，不是随手写的魔数。集中放一处，
+// 以后要调（比如觉得 8 分才算高强度太严）只改这里，一眼能看到全貌。
+// 注释里的"依据"也才挂得住。
+
+// 组间休息短于这个秒数 → 一组接一组，算循环训练
+const LOW_INTENSITY_MAX_REST_SEC = 60
+
+// RPE 到这个分算"很累" → 高强度（10 是再也做不动了）
+const RPE_HIGH_MIN = 8
+
+// RPE 到这个分算"有点累" → 中等；低于它算低强度
+const RPE_MODERATE_MIN = 6
+
 // "总时长短、组数少"的两个门槛。沾一个就算低强度。
 const LOW_INTENSITY_MAX_MIN = 30
 const LOW_INTENSITY_MAX_SETS = 8
 
+// 推荐结果：不只有哪一档，还有**为什么**。
+//
+// 【为什么要把理由一起返回】
+// 之前只返回一个档位，用户看到"系统建议：高强度"却不知道为什么，
+// 更看不出"我心里想的那一档"和它对不对得上。理由必须跟档位从**同一个
+// 函数**里出来 —— 单独再写一个 explain 函数的话，两份判断逻辑一定会走偏，
+// 到时候界面上的理由和实际用的档位对不上，比不说还糟。
+export type MetRecommendation = {
+  level: StrengthMetLevel
+  reason: string
+}
+
 // 根据这次训练的数据，推荐一个强度档位。
 //
 // 【判断顺序就是优先级】取第一个命中的那条。
-// 所以"组间休息很短"排在"有大重量"前面 —— 一组接一组地练，
-// 哪怕里面有大重量，整体也更接近循环训练那种持续输出的感觉。
+//
+// ★ 2026-09-24 改过，改的原因值得记着：
+//
+// 原来第一优先是"组间休息很短→循环训练"，然后是"有大重量动作→高强度"，
+// 最后"时间短或组数少→低强度"。全靠**从数据里猜**。
+//
+// 结果出了这么一件事：倒蹬机 90kg×8 练到 RPE 10、16 组、42 分钟，
+// 系统给的是"中等" —— 因为腿举不在"大重量"名单里（名单当时全是杠铃），
+// 而休息/时长两条门槛都没沾上。问题是：
+//
+//   **用户每组都记了 RPE。RPE 就是他亲口说的"这一组有多难"，
+//   而我们放着这个直接证据不用，去猜。**
+//
+// 所以现在改成：**记了 RPE 就信 RPE**，没记才退回按数据推测。
 //
 // 注意：调用方应该先确认这次有力量记录，纯有氧的场次用不上这个档位。
 export function recommendMetLevel(
   session: WorkoutSession,
   cardioIds: ReadonlySet<string>,
-): StrengthMetLevel {
+): MetRecommendation {
   const strength = session.entries.filter((e) => !cardioIds.has(e.exerciseId))
-  if (strength.length === 0) return DEFAULT_MET_LEVEL
-
-  // ① 组间休息普遍很短 → 循环训练
-  const rest = medianRestSeconds(strength)
-  if (rest !== null && rest < 60) return 'circuit'
-
-  // ② 练了大重量复合动作 → 高强度
-  if (strength.some((e) => HEAVY_COMPOUND_IDS.has(e.exerciseId))) return 'high'
-
-  // ③ 时间短或组数少 → 低强度
-  const sec = sessionSeconds(session)
-  if ((sec !== null && sec < LOW_INTENSITY_MAX_MIN * 60) || strength.length < LOW_INTENSITY_MAX_SETS) {
-    return 'low'
+  if (strength.length === 0) {
+    return { level: DEFAULT_MET_LEVEL, reason: '这次没有力量记录' }
   }
 
-  // ④ 其余按常规增肌算
-  return DEFAULT_MET_LEVEL
+  const rest = medianRestSeconds(strength)
+  // 休息中位数 < 60 秒 = 一组接一组，算"循环训练"。
+  // rest 为 null 表示压根没有可算的间隔（比如只有一组），那就不算短。
+  const shortRestSec = rest !== null && rest < LOW_INTENSITY_MAX_REST_SEC ? rest : null
+
+  // ---------- ① 第一优先：记了 RPE ----------
+  const rpe = medianRpe(strength)
+  if (rpe !== null) {
+    // RPE 可能是 7.5，所以用原样输出，不做取整
+    const howHard = `你记的 RPE 中位数是 ${rpe}`
+
+    if (rpe >= RPE_HIGH_MIN) {
+      // 又累、休息又短 → 这是循环训练那种持续输出，比单纯"高强度"还高一档
+      if (shortRestSec !== null) {
+        return {
+          level: 'circuit',
+          reason: `${howHard}，而且每组之间只隔了约 ${Math.round(shortRestSec)} 秒`,
+        }
+      }
+      return { level: 'high', reason: howHard }
+    }
+    if (rpe >= RPE_MODERATE_MIN) return { level: 'moderate', reason: howHard }
+    return { level: 'low', reason: howHard }
+  }
+
+  // ---------- ② 没记 RPE：退回按训练数据推测 ----------
+  if (shortRestSec !== null) {
+    return {
+      level: 'circuit',
+      reason: `每组之间只隔了约 ${Math.round(shortRestSec)} 秒`,
+    }
+  }
+
+  if (strength.some((e) => HEAVY_COMPOUND_IDS.has(e.exerciseId))) {
+    return { level: 'high', reason: '这次练了深蹲、推胸这类大重量多关节动作' }
+  }
+
+  const sec = sessionSeconds(session)
+  const shortTime = sec !== null && sec < LOW_INTENSITY_MAX_MIN * 60
+  if (shortTime || strength.length < LOW_INTENSITY_MAX_SETS) {
+    return {
+      level: 'low',
+      reason: shortTime
+        ? `这次只练了 ${Math.round(sec / 60)} 分钟`
+        : `这次只有 ${strength.length} 组`,
+    }
+  }
+
+  // ---------- ③ 其余按常规增肌算 ----------
+  // 顺便说一句：这条兜底选"中等"而不是别的，理由和 DEFAULT_MET_LEVEL 一样 ——
+  // 猜错的代价最小。
+  return { level: DEFAULT_MET_LEVEL, reason: '常规增肌的强度' }
 }
