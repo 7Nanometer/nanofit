@@ -16,6 +16,7 @@ import {
   readBodyMetrics,
   readCustomExercises,
   readSessions,
+  readSettings,
 } from '../lib/storage'
 import {
   bodySeries,
@@ -25,14 +26,18 @@ import {
   lastSessionVolume,
   niceAxis,
   splitSessions,
+  thisMonthKcal,
   thisWeekCardioSec,
   thisWeekCount,
+  thisWeekKcal,
   thisWeekVolume,
   usedExerciseIds,
+  weeklyKcal,
   weeklyVolumes,
 } from '../lib/stats'
 import { formatDateCN } from '../lib/date'
 import { formatDuration } from '../lib/calc'
+import { formatKcal, resolveWeightKg, roundKcal } from '../lib/kcal'
 import { ChartCard } from '../components/ChartCard'
 import { StatTile } from '../components/StatTile'
 import { chartColors } from '../lib/theme'
@@ -134,6 +139,23 @@ export function StatsScreen() {
   // 有氧那两块（只统计有氧记录，一条力量都不掺）
   const cardioSec = thisWeekCardioSec(cardio)
   const cardioPoints = cardioDistanceSeries(cardio)
+
+  // ---------- 消耗热量（估算）----------
+  //
+  // 必须要有体重才算得出来。优先「身体数据」里最近一次，
+  // 没记过才用设置里那个默认体重；两个都没有就整节不显示、改提示。
+  const [settings] = useState(readSettings)
+  const weightKg = resolveWeightKg(bodyMetrics, settings)
+
+  const weekKcal = thisWeekKcal(sessions, weightKg, cardioIds)
+  const monthKcal = thisMonthKcal(sessions, weightKg, cardioIds)
+  const kcalPoints = weeklyKcal(sessions, weightKg, cardioIds, 8)
+
+  // 纵轴刻度。两个 true 的含义见下面柱状图那段注释。
+  const kcalAxis = niceAxis(
+    kcalPoints.flatMap((p) => [p.strength, p.cardio]),
+    true,
+  )
 
   // 柱状图的纵轴刻度。第二个参数 true = 一定要含 0 ——
   // 柱状图里"柱子的高度"直接表示大小，不從 0 起的话比例是骗人的。
@@ -342,7 +364,124 @@ export function StatsScreen() {
         </>
       )}
 
-      {/* ---------- 5. 身体数据 ---------- */}
+      {/* ---------- 5. 消耗热量（估算） ----------
+          没有体重就算不出来。整节不显示，改成告诉主人去哪填 ——
+          显示一堆 0 或者"—"只会让人以为是坏的。 */}
+      {weightKg === undefined ? (
+        <>
+          <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">
+            消耗热量
+          </h2>
+          <p className="rounded-xl border border-line bg-surface p-3 text-sm text-muted">
+            填个体重就能看到热量统计。
+            <br />
+            去「设置 → 默认体重」填一个，或者在「设置 → 身体数据」里记一次
+            —— 后者更准，而且能顺便看体重趋势。
+          </p>
+        </>
+      ) : (
+        <>
+          <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">
+            消耗热量（估算）
+          </h2>
+
+          <div className="mb-3 flex gap-2">
+            {/* 拆分那两个数也先过 roundKcal，否则会出现
+                "总共约 520，其中力量 188、有氧 330" 这种前后对不上 */}
+            <StatTile
+              label="本周消耗"
+              value={formatKcal(weekKcal.total)}
+              hint={`力量 ${roundKcal(weekKcal.strength)} + 有氧 ${roundKcal(weekKcal.cardio)}`}
+            />
+            <StatTile
+              label="本月消耗"
+              value={formatKcal(monthKcal.total)}
+              hint={`力量 ${roundKcal(monthKcal.strength)} + 有氧 ${roundKcal(monthKcal.cardio)}`}
+            />
+          </div>
+
+          <ChartCard
+            title="每周消耗"
+            subtitle="最近 8 周。力量和有氧分开画，因为它们的算法完全不同。"
+            rows={kcalPoints.map((p) => ({
+              周: p.label,
+              力量: p.strength.toLocaleString(),
+              有氧: p.cardio.toLocaleString(),
+            }))}
+            columns={[
+              { key: '周', label: '那一周（周一的日期）' },
+              { key: '力量', label: '力量训练，千卡' },
+              { key: '有氧', label: '有氧，千卡' },
+            ]}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={kcalPoints}
+                // left 不能是负数，原因和上面那张柱状图一样：
+                // 留不出空间的话五位数标签会被切掉一位
+                margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={C.line}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  stroke={C.muted}
+                  fontSize={11}
+                  tickLine={false}
+                />
+                <YAxis
+                  stroke={C.muted}
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={formatAxis}
+                  domain={kcalAxis.domain}
+                  ticks={kcalAxis.ticks}
+                  width={52}
+                />
+                <Tooltip
+                  {...tooltipStyle(C)}
+                  formatter={(value, name) => [
+                    `${Number(value).toLocaleString()} 千卡`,
+                    String(name),
+                  ]}
+                  labelFormatter={(label) => `${String(label)} 那一周`}
+                />
+                <Bar
+                  dataKey="strength"
+                  name="力量"
+                  fill={C.brand}
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="cardio"
+                  name="有氧"
+                  fill={C.chart2}
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          {/* 这段说明不是客套话，是这个功能的一部分。
+              热量是估的，界面上必须说清楚 —— 不写的话，
+              主人拿它跟手环一对数字发现差很多，会以为是算错了。 */}
+          <p className="mt-1 rounded-xl border border-line bg-surface p-3 text-xs text-muted">
+            这是估算值，不含运动后持续燃烧的部分。
+            <br />
+            算法是（MET − 1）× 体重 × 时长，减掉 1 是为了刨去"躺着也要烧"
+            的基础代谢，所以它比手环上那个数小 —— 手环给的常常是总消耗。
+            <br />
+            力量和有氧各用一套 MET 表推算，误差约 10–20%。
+            手环和器械上显示的卡路里同样是估算，和这里对不上是正常的。
+          </p>
+        </>
+      )}
+
+      {/* ---------- 6. 身体数据 ---------- */}
       {(hasWeight || hasFat || hasHeight) && (
         <>
           <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">

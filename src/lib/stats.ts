@@ -1,6 +1,7 @@
 import type { BodyMetric, SetEntry, WorkoutSession } from '../types'
 import { estimate1RM, sessionVolume, setVolume } from './calc'
 import { dateKey, parseDateKey } from './date'
+import { sessionKcalSplit } from './kcal'
 
 // ============================================================
 // 把原始记录"算"成图表要用的数据
@@ -341,4 +342,112 @@ export function cardioDistanceSeries(
     }
   }
   return points.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+// ---------- 消耗热量 ----------
+
+export type KcalSplit = {
+  strength: number
+  cardio: number
+  total: number
+}
+
+const ZERO_KCAL: KcalSplit = { strength: 0, cardio: 0, total: 0 }
+
+// 某一天（含）以后一共消耗了多少，力量和有氧分开算。
+//
+// 【为什么要分开】
+// 两个数的含义完全不同：力量那边是靠"这次练了多久 + 你自己选的强度档位"
+// 推的，有氧那边是靠"动作类型 + 速度"推的。混成一个数字看不出问题在哪。
+export function kcalInRange(
+  sessions: WorkoutSession[],
+  weightKg: number | undefined,
+  cardioIds: ReadonlySet<string>,
+  fromKey: string,
+): KcalSplit {
+  let strength = 0
+  let cardio = 0
+  for (const session of sessions) {
+    // 和 weeklyVolumes 一样用字符串比日期：'2026-09-24' 这种写法
+    // 按文字比就等于按时间比
+    if (session.date < fromKey) continue
+    const split = sessionKcalSplit(session, weightKg, cardioIds)
+    if (split === null) continue
+    strength += split.strength
+    cardio += split.cardio
+  }
+  if (strength === 0 && cardio === 0) return ZERO_KCAL
+  return { strength, cardio, total: strength + cardio }
+}
+
+// 本月第一天。和 mondayOf 是一个路子，只是按月份归零。
+function firstOfMonth(now: Date): Date {
+  return new Date(now.getFullYear(), now.getMonth(), 1)
+}
+
+// 本周（周一起）消耗了多少
+export function thisWeekKcal(
+  sessions: WorkoutSession[],
+  weightKg: number | undefined,
+  cardioIds: ReadonlySet<string>,
+): KcalSplit {
+  return kcalInRange(sessions, weightKg, cardioIds, dateKey(mondayOf(new Date())))
+}
+
+// 本月（1 号起）消耗了多少
+export function thisMonthKcal(
+  sessions: WorkoutSession[],
+  weightKg: number | undefined,
+  cardioIds: ReadonlySet<string>,
+): KcalSplit {
+  return kcalInRange(
+    sessions,
+    weightKg,
+    cardioIds,
+    dateKey(firstOfMonth(new Date())),
+  )
+}
+
+// 每周消耗，给柱状图用。每周两根柱子：力量、有氧。
+export type WeeklyKcalPoint = {
+  label: string
+  strength: number
+  cardio: number
+}
+
+export function weeklyKcal(
+  sessions: WorkoutSession[],
+  weightKg: number | undefined,
+  cardioIds: ReadonlySet<string>,
+  weekCount = 8,
+): WeeklyKcalPoint[] {
+  const points: WeeklyKcalPoint[] = []
+  const monday = mondayOf(new Date())
+
+  for (let i = weekCount - 1; i >= 0; i--) {
+    const start = new Date(monday)
+    start.setDate(start.getDate() - i * 7)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 6)
+
+    const startKey = dateKey(start)
+    const endKey = dateKey(end)
+
+    let strength = 0
+    let cardio = 0
+    for (const session of sessions) {
+      if (session.date < startKey || session.date > endKey) continue
+      const split = sessionKcalSplit(session, weightKg, cardioIds)
+      if (split === null) continue
+      strength += split.strength
+      cardio += split.cardio
+    }
+    // 抹成整数：这是估算，小数点后几位没有任何意义
+    points.push({
+      label: shortLabel(startKey),
+      strength: Math.round(strength),
+      cardio: Math.round(cardio),
+    })
+  }
+  return points
 }

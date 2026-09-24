@@ -6,6 +6,8 @@ import { registerBackHandler } from '../lib/backbutton'
 import { downloadBackup, importBackup } from '../lib/json'
 import { readSettings, writeSettings } from '../lib/storage'
 import { applyTheme } from '../lib/theme'
+import { textToNumber } from '../lib/calc'
+import { NumberField } from '../components/NumberField'
 import { BodyScreen } from './BodyScreen'
 import { LibraryScreen } from './LibraryScreen'
 import { TemplateScreen } from './TemplateScreen'
@@ -34,6 +36,32 @@ export function SettingsScreen() {
   const [sub, setSub] = useState<Sub>('list')
   const [settings, setSettings] = useState<Settings>(readSettings)
   const [restPickerOpen, setRestPickerOpen] = useState(false)
+
+  // ---------- 默认体重 ----------
+  // 和休息计时器一样是"点一下展开"，不切子页面。
+  // 【为什么放在这儿而不是「身体数据」里】
+  // 设置页这份 settings 是挂载时读一次的，而「身体数据」是子页面、
+  // 设置页不会卸载。在子页面里改了值，返回后这一页的 hint 还是旧的。
+  // 放在本页展开就没有这个问题。
+  const [weightPickerOpen, setWeightPickerOpen] = useState(false)
+  const [weightText, setWeightText] = useState(() =>
+    settings.defaultWeightKg !== undefined
+      ? String(settings.defaultWeightKg)
+      : '',
+  )
+
+  const weightValue = textToNumber(weightText)
+  // 空着也算合法 —— 那表示"取消这个设置"
+  const weightValid =
+    weightValue === null || (weightValue >= 20 && weightValue <= 300)
+
+  function saveDefaultWeight() {
+    if (!weightValid) return
+    // 注意这里写 undefined 而不是 0：0 是"体重 0 公斤"，那是个假数字，
+    // 会让热量算出个 0。undefined 才是"没这个设置"。
+    saveSettings({ ...settings, defaultWeightKg: weightValue ?? undefined })
+    setWeightPickerOpen(false)
+  }
   const [storageError, setStorageError] = useState(false)
 
   // 改设置的统一出口。先写储物柜，再看写成功没有，
@@ -185,6 +213,47 @@ export function SettingsScreen() {
                 {sec} 秒
               </button>
             ))}
+          </div>
+        )}
+
+        {/* 默认体重：没在「身体数据」里记过体重时，算热量用它兜底。
+            hint 里那句"填个体重就能看到热量统计"是这个功能的入口 ——
+            没填过的时候统计页那一节是空的，主人得知道去哪补。 */}
+        <SettingRow
+          label="默认体重"
+          hint={
+            settings.defaultWeightKg !== undefined
+              ? `${settings.defaultWeightKg} kg · 没记过体重时用它算热量`
+              : '填个体重就能看到热量统计'
+          }
+          onClick={() => setWeightPickerOpen(!weightPickerOpen)}
+        />
+        {weightPickerOpen && (
+          <div className="rounded-xl border border-line bg-surface p-3">
+            <p className="mb-2 text-xs text-muted">
+              算热量估算用的。在「身体数据」里记过体重的话以那个为准，
+              这里只是"从没记过"时的兜底。
+            </p>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <NumberField
+                  value={weightText}
+                  onChange={setWeightText}
+                  placeholder="75"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={saveDefaultWeight}
+                disabled={!weightValid}
+                className="min-h-11 shrink-0 rounded-lg bg-brand px-5 text-sm font-semibold text-on-brand disabled:opacity-40"
+              >
+                保存
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              单位 kg，合理范围 20–300。清空再保存 = 取消这个设置。
+            </p>
           </div>
         )}
 
