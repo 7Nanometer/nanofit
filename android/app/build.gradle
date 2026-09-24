@@ -7,8 +7,15 @@ android {
         applicationId "com.nanometer7.nanofit.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // 版本号（编法见 CLAUDE.md「版本号」一节 / README「版本号怎么编」）
+        //   versionCode = 打包那天的日期 YYYYMMDD
+        //     安卓拿它比大小，判断"手机上那个是不是旧的"。只能往大改 ——
+        //     往小改会 INSTALL_FAILED_VERSION_DOWNGRADE，屏幕上只说"应用未安装"。
+        //   versionName = 日期 · 7 位存档号（git 提交的短哈希）
+        //     给人看的。App 的设置页最下面会显示它。
+        //   ★ 存档号要先提交代码、拿到哈希，再写到这里提交。
+        versionCode 20260924
+        versionName "2026.09.24 · a5121da"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
