@@ -4,6 +4,7 @@ import { SettingsScreen } from './screens/SettingsScreen'
 import { StatsScreen } from './screens/StatsScreen'
 import { TrainScreen } from './screens/TrainScreen'
 import { exitApp, handleBack, onBackButton } from './lib/backbutton'
+import { onRestNotifyTap } from './lib/restnotify'
 
 // ============================================================
 // 这个文件是整个 App 的"外壳"
@@ -66,6 +67,24 @@ function App() {
     })
     // 在浏览器里打开时 onBackButton 什么都不做，直接返回空的注销函数，
     // 所以网页版一点影响都没有。
+  }, [])
+
+  // ---------- 点了"休息结束"那条通知 ----------
+  //
+  // 【为什么需要这一段】
+  // 通知是在你切到别的 App（或者在别的 tab 上）的时候才会响的。
+  // 点它的时候，App 可能停在「统计」页 —— 而"休息结束 点一下继续"
+  // 是在训练页上的。不主动切回去的话，你点开 App 会觉得"怎么什么都没发生"。
+  //
+  // 【为什么只挂一次（依赖数组留空）】
+  // 和上面返回键那段的道理一样：注册的时机无所谓，切 tab 也不影响它。
+  //
+  // 【冷启动点通知会怎样】
+  // 插件只在 App 还活着的时候才发这个事件，冷启动时不发。
+  // 但冷启动本来就落在训练页（下面 useState 的初值就是 'train'），
+  // 所以那个场景不用这段代码也照样对。
+  useEffect(() => {
+    return onRestNotifyTap(() => setTab('train'))
   }, [])
 
   return (

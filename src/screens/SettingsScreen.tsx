@@ -4,6 +4,14 @@ import type { Settings, Theme } from '../types'
 import { PRESET_EXERCISES } from '../data/exercises'
 import { registerBackHandler } from '../lib/backbutton'
 import { downloadBackup, importBackup } from '../lib/json'
+import {
+  getRestNotifyStatus,
+  openExactAlarmSetting,
+  refreshRestNotify,
+  requestRestNotify,
+  sendTestNotification,
+  subscribeRestNotify,
+} from '../lib/restnotify'
 import { readSettings, writeSettings } from '../lib/storage'
 import { applyTheme } from '../lib/theme'
 import { textToNumber } from '../lib/calc'
@@ -49,6 +57,40 @@ export function SettingsScreen() {
       ? String(settings.defaultWeightKg)
       : '',
   )
+
+  // ---------- 后台提醒 ----------
+  // 和休息计时器、默认体重一样是"点一下展开"，不切子页面。
+  const [notifyOpen, setNotifyOpen] = useState(false)
+  // 状态直接问 restnotify.ts 要。它是同步的（状态一直存在内存里），
+  // 所以能当 useState 的初值用。
+  const [notifyStatus, setNotifyStatus] = useState(getRestNotifyStatus)
+  const [testResult, setTestResult] = useState<string | null>(null)
+
+  // 【为什么要订阅，而不是挂载时查一次就完事】
+  // 你点「去开启」会跳到系统设置页，回来时这个页面并没有卸载 ——
+  // 不订阅的话状态会一直停在"未开启"，看着像没生效，你会以为白点了。
+  // restnotify.ts 那边每次回到前台都会重查一遍，查完通知这里重画。
+  useEffect(() => {
+    void refreshRestNotify()
+    return subscribeRestNotify(() => setNotifyStatus(getRestNotifyStatus()))
+  }, [])
+
+  // 申请通知权限（弹系统那个"允许通知吗"的框）
+  async function enableNotify() {
+    await requestRestNotify()
+    setNotifyStatus(getRestNotifyStatus())
+  }
+
+  // 点「试一下」：预约一条 5 秒后的测试提醒
+  async function runTest() {
+    setTestResult(null)
+    const ok = await sendTestNotification()
+    setTestResult(
+      ok
+        ? '已预约，5 秒后响。可以现在就把 App 切到后台试试。'
+        : '没能发出去 —— 先把上面的「通知权限」打开。',
+    )
+  }
 
   const weightValue = textToNumber(weightText)
   // 空着也算合法 —— 那表示"取消这个设置"
@@ -216,6 +258,94 @@ export function SettingsScreen() {
           </div>
         )}
 
+        {/* 后台提醒：切到别的 App 也能响（2026-09-24 加的）。
+            它和上面那个「休息计时器」是一对：一个管休息多久，一个管到点怎么叫醒你。 */}
+        <SettingRow
+          label="后台提醒"
+          hint={
+            !notifyStatus.native
+              ? '只在手机 App 里生效'
+              : !notifyStatus.granted
+                ? '未开启 · 切到别的 App 就不会提醒你'
+                : notifyStatus.exact
+                  ? '已开启 · 锁屏、切 App 都会提醒'
+                  : '已开启 · 可能晚几秒'
+          }
+          onClick={() => setNotifyOpen(!notifyOpen)}
+        />
+        {notifyOpen && (
+          <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
+            {!notifyStatus.native ? (
+              <p className="text-xs text-muted">
+                「后台提醒」是把"到点叫我"这件事交给手机系统去办，
+                所以只有装在手机上的 App 才有这个能力，网页版做不到。
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-muted">
+                  组间休息到点时，就算你切到别的 App 或者锁了屏，手机也会响。
+                  原理是把这条提醒交给手机系统预约，而不是让 App 自己掐着表等 ——
+                  App 切到后台后，自己掐的表就不走了。
+                </p>
+
+                <NotifyLine
+                  label="通知权限"
+                  ok={notifyStatus.granted}
+                  okText="已开启"
+                  badText="未开启，切到后台就不会提醒你"
+                  actionLabel="去开启"
+                  onAction={() => void enableNotify()}
+                />
+
+                <NotifyLine
+                  label="精确闹钟"
+                  ok={notifyStatus.exact}
+                  okText="已授权 · 到点准响"
+                  badText="未授权 · 可能晚几秒到几十秒"
+                  actionLabel="去设置"
+                  onAction={() => void openExactAlarmSetting()}
+                />
+
+                {/* 电池优化引导。这一段是【文字说明】，不跳转 ——
+                    国内各家的设置页路径又乱又常改，跳过去也不一定落在对的地方，
+                    写清楚让你自己点反而更靠谱。 */}
+                <div className="rounded-lg border border-line p-3">
+                  <div className="text-sm font-medium text-ink">
+                    小米 / 华为 / OPPO / vivo 看这里
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    这几家的系统为了省电，会把后台 App 的提醒延迟、甚至直接吞掉。
+                    如果发现「有时响有时不响」，去把本应用加进省电白名单：
+                  </p>
+                  <ul className="mt-2 space-y-1 text-xs text-muted">
+                    <li>· 小米：设置 → 应用设置 → 应用管理 → NanoFIT → 省电策略 → 选「无限制」，再把「自启动」打开</li>
+                    <li>· 华为：设置 → 应用 → 应用启动管理 → NanoFIT → 关掉「自动管理」，三个开关全打开</li>
+                    <li>· OPPO：设置 → 电池 → 应用耗电管理 → NanoFIT → 允许「完全后台行为」</li>
+                    <li>· vivo：设置 → 电池 → 后台耗电管理 → NanoFIT → 允许「后台高耗电」</li>
+                    <li>· 原生安卓：设置 → 应用 → NanoFIT → 电池 → 选「不受限制」</li>
+                  </ul>
+                  <p className="mt-1 text-xs text-muted">
+                    （系统版本不同，菜单名字会有点出入。）
+                  </p>
+                </div>
+
+                {/* 试一下：不用真练一组，5 秒后就能看到效果。
+                    权限、声音、震动、横幅、点一下能不能回到 App，全都能试出来。 */}
+                <button
+                  type="button"
+                  onClick={() => void runTest()}
+                  className="min-h-11 w-full rounded-lg border border-line px-4 text-sm text-ink-2"
+                >
+                  试一下：5 秒后提醒我
+                </button>
+                {testResult !== null && (
+                  <p className="text-xs text-muted">{testResult}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* 默认体重：没在「身体数据」里记过体重时，算热量用它兜底。
             hint 里那句"填个体重就能看到热量统计"是这个功能的入口 ——
             没填过的时候统计页那一节是空的，主人得知道去哪补。 */}
@@ -362,5 +492,51 @@ function SettingRow({
       </div>
       <span className="shrink-0 text-lg text-muted">›</span>
     </button>
+  )
+}
+
+// 「后台提醒」里的一行状态：一个名字、一句现状、需要时给个按钮。
+//
+// 【为什么单独写一个】
+// 通知权限和精确闹钟是两条几乎一样的行，只有文案和按钮不一样。
+// 手抄两遍的话，改样式时一定会漏掉一处。
+//
+// 【为什么"已完成"时按钮整个不显示】
+// 显示一个点不动的灰按钮，比不显示更让人困惑。
+function NotifyLine({
+  label,
+  ok,
+  okText,
+  badText,
+  actionLabel,
+  onAction,
+}: {
+  label: string
+  ok: boolean
+  okText: string
+  badText: string
+  actionLabel: string
+  onAction: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1">
+        <div className="text-sm font-medium text-ink">{label}</div>
+        {/* 没完成时用主色（橙红）标出来 —— 这两条是"要你去处理"的，
+            和旁边那些纯说明文字得区分开 */}
+        <div className={`mt-0.5 text-xs ${ok ? 'text-muted' : 'text-brand'}`}>
+          {ok ? okText : badText}
+        </div>
+      </div>
+      {!ok && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="min-h-11 shrink-0 rounded-lg border border-line px-3 text-sm text-ink-2"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
   )
 }

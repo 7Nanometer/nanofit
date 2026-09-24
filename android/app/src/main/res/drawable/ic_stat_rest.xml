@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================
+  通知栏上的小图标：一个秒表（2026-09-24 加）
+  ============================================================
+
+  【它是给谁用的】
+  "组间休息到点提醒"那条通知，左边那个小图标。配置在 capacitor.config.ts
+  的 plugins.LocalNotifications.smallIcon 里（填的是文件名去掉扩展名）。
+
+  【为什么必须画成纯白单色】
+  安卓只把这张图当"剪影"用：它只看哪些像素是"实心"的，然后全部染成白色，
+  再根据系统主题调深浅。所以：
+    · 彩色图会糊成一团白块，看不出是什么
+    · 细节太细的线在小尺寸下会直接消失
+  这条路径上只有 fillColor="#FFFFFFFF" 一种颜色，是故意的，别改成彩色。
+
+  【画的是什么】
+  一个圆环 + 一根指针 + 顶上那个按钮 —— 就是秒表。
+  三段分开写成三个 <path>，是有原因的：
+    · 第一段圆环用 evenOdd（"外圈减内圈" = 环），一个 path 里塞两个圆
+    · 另外两段是独立的 path。分开写才不会互相"挖洞"——
+      如果全塞进同一个 evenOdd 的 path 里，指针和圆环重叠的地方
+      会被当成"挖空"，画出来就是个破洞。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 圆环：外圆 r=7 减掉内圆 r=5，剩下 2 个单位的环宽 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M5,12 A7,7 0 1,1 19,12 A7,7 0 1,1 5,12 Z M7,12 A5,5 0 1,1 17,12 A5,5 0 1,1 7,12 Z" />
+
+    <!-- 指针：从圆心往上指（圆心在 12,12） -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11.1,8.8 h1.8 v3.6 h-1.8 z" />
+
+    <!-- 顶上那个按钮。下沿故意压到 y=5.4，和圆环顶部（y=5）搭上一点，看着才是连着的 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.4,3.2 h5.2 a0.9,0.9 0 0 1 0,1.8 h-5.2 a0.9,0.9 0 0 1 0,-1.8 z" />
+</vector>

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import './index.css'
 import App from './App.tsx'
+import { initRestNotify } from './lib/restnotify'
 import { initStorage } from './lib/storage'
 
 // ---------- 先把数据读进内存，再画界面 ----------
@@ -19,6 +20,20 @@ import { initStorage } from './lib/storage'
 // 失败时 storage.ts 会禁止一切写入，界面会因为存不进去而亮红字提示 ——
 // 绝不会出现"看起来存好了、其实硬盘上被清空"的情况。
 void initStorage().finally(() => {
+  // ---------- 把"后台休息提醒"接上（2026-09-24 加的）----------
+  //
+  // 【为什么必须放在这儿，不能放 App.tsx 里】
+  // 它一上来就要读"正在进行的训练"里那个休息结束时刻（restnotify.ts 顶部
+  // 讲了为什么要读存档）。而读盘是异步的，上面 initStorage() 还没读完时
+  // 内存里是空的 —— 那就会读到"没有在休息"，白跑一趟。
+  // 所以卡在读盘完成之后、画界面之前，这个位置是唯一对的。
+  //
+  // 【为什么放 React 外面】
+  // React 在开发模式下会故意把组件挂载两次（StrictMode），
+  // 放外面就只执行一次，不用额外写防重复的代码。
+  // 网页端它自己会整个空转，什么都不做。
+  initRestNotify()
+
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
