@@ -48,6 +48,7 @@ import {
   writeSettings,
 } from '../lib/storage'
 import { CardioForm } from '../components/CardioForm'
+import { ElapsedBadge } from '../components/ElapsedBadge'
 import { MetPicker } from '../components/MetPicker'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { RestTimer } from '../components/RestTimer'
@@ -690,6 +691,18 @@ export function TrainScreen() {
         <div className="flex-1">
           <h1 className="text-xl font-bold">
             {formatDateCN(session?.date ?? today)}
+            {/* ---------- 已练多久（★ 2026-09-24 加的）----------
+                计时器在这个小组件**里面**，所以每 5 秒只重画这一小块，
+                不会把整页几十张卡片跟着重画。
+                只要 startedAt 存在就显示 —— 包括"加了动作还没记第一组"那段，
+                因为计时确实是从加第一个动作就开始了。 */}
+            {session !== null && session.startedAt !== undefined && (
+              <ElapsedBadge
+                startedAt={session.startedAt}
+                stale={showStaleWarning}
+                lastSetISO={staleLastISO}
+              />
+            )}
           </h1>
           <p className="mt-0.5 text-sm text-muted">
             {hasEntries ? summaryParts.join(' · ') : '还没开始记'}
