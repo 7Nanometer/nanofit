@@ -176,7 +176,10 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'bb-upright-row', name: '直立划船', muscleGroup: 'shoulders', equipment: '杠铃', isCustom: false, note: '杠铃贴着身体往上提到下巴高度，肘比手高。肩夹挤感明显就换窄握或少做' },
   { id: 'bw-handstand-pushup', name: '倒立撑', muscleGroup: 'shoulders', equipment: '自重', isCustom: false, note: '靠墙倒立着往下推。很硬核，肩力量不够别硬上。重量填 0' },
 
-  // ---------------- 手臂（6 个）----------------
+  // ---------------- 手臂（25 个）----------------
+  //
+  // 前 6 个是 2026-09-23 最初那批，id 不许改。后 19 个是 2026-09-24 扩充的。
+  // 排法：先肱二头（各种弯举），再肱三头（各种下压/臂屈伸），最后前臂
   { id: 'bb-curl', name: '杠铃弯举', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '肘夹紧身体两侧，别用腰晃着甩上去' },
   { id: 'db-alt-curl', name: '哑铃交替弯举', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '弯起时手心往外转，顶峰用力挤一下' },
   { id: 'db-hammer-curl', name: '锤式弯举', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '手心始终相对，练肱肌，让手臂看起来更厚' },
@@ -184,12 +187,59 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'bb-skull-crusher', name: '仰卧臂屈伸', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '躺平，杠铃下放到额头上方，练肱三头肌' },
   { id: 'bb-close-grip-bench', name: '窄距卧推', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '握距与肩同宽，肘贴身，练肱三头肌' },
 
-  // ---------------- 核心（5 个）----------------
+  // ---- 2026-09-24 扩充（19 个）----
+  // 肱二头
+  { id: 'bb-preacher-curl', name: '牧师凳弯举', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '大臂固定在斜板上，只有前臂动。所有弯举里最不容易借力的' },
+  { id: 'db-concentration-curl', name: '集中弯举', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '坐着，手肘顶在大腿内侧，慢慢弯起来。练肱二头的顶峰' },
+  { id: 'db-incline-curl', name: '上斜哑铃弯举', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '躺在上斜凳上，手臂自然垂下再弯起。肱二头被拉长，感觉更明显' },
+  { id: 'cable-curl', name: '绳索弯举', muscleGroup: 'arms', equipment: '绳索', isCustom: false, note: '用绳索把手做弯举，全程都有张力，最底下那段也不松劲' },
+  { id: 'mach-curl', name: '器械弯举', muscleGroup: 'arms', equipment: '固定器械', isCustom: false, note: '专门的弯举机，大臂有托垫，不容易靠身体晃起来' },
+  { id: 'cable-hammer-curl', name: '绳索锤式弯举', muscleGroup: 'arms', equipment: '绳索', isCustom: false, note: '用绳索把手、手心相对做弯举，练肱肌，让手臂看起来更厚' },
+  { id: 'cable-one-arm-curl', name: '单臂绳索弯举', muscleGroup: 'arms', equipment: '绳索', isCustom: false, note: '一只手拉单柄弯举，可以稍微转一下手腕。只记一侧的重量' },
+  // 肱三头
+  { id: 'cable-overhead-extension', name: '绳索过顶臂屈伸', muscleGroup: 'arms', equipment: '绳索', isCustom: false, note: '背对滑轮，绳索从头顶往前上方伸直。重点练肱三头长头' },
+  { id: 'db-overhead-extension', name: '哑铃颈后臂屈伸', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '两手托一个哑铃放到脑后，伸直手臂举起来。练肱三头肌' },
+  { id: 'db-lying-extension', name: '哑铃仰卧臂屈伸', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '躺平，两只哑铃从额头往上方推直。比杠铃版活动范围更大' },
+  { id: 'mach-triceps-extension', name: '器械臂屈伸', muscleGroup: 'arms', equipment: '固定器械', isCustom: false, note: '专门的臂屈伸机，坐着往下压或往后伸，练肱三头肌' },
+  { id: 'cable-one-arm-pushdown', name: '单臂绳索下压', muscleGroup: 'arms', equipment: '绳索', isCustom: false, note: '一只手往下压，能看出两边差多少。只记一侧的重量' },
+  { id: 'db-kickback', name: '哑铃俯身臂屈伸', muscleGroup: 'arms', equipment: '哑铃', isCustom: false, note: '俯身，大臂贴着身体不动，只把前臂往后伸直。小重量就够' },
+  { id: 'smith-close-grip-bench', name: '史密斯窄距卧推', muscleGroup: 'arms', equipment: '史密斯', isCustom: false, note: '在史密斯机里做窄距卧推。轨道固定，练肱三头肌更稳' },
+  { id: 'bw-bench-dip', name: '凳上反屈伸', muscleGroup: 'arms', equipment: '自重', isCustom: false, note: '背对凳子，双手撑在凳子边，屈肘下沉再撑起来。重量填 0' },
+  { id: 'bw-diamond-pushup', name: '钻石俯卧撑', muscleGroup: 'arms', equipment: '自重', isCustom: false, note: '两手拇指和食指拼成一个三角形，肘贴着身体。很吃肱三头。重量填 0' },
+  // 前臂
+  { id: 'bb-reverse-curl', name: '反握杠铃弯举', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '手心朝下握（反握），练前臂和肱肌。重量比正常弯举轻不少' },
+  { id: 'bb-wrist-curl', name: '腕弯举', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '前臂架在腿上，手心朝上，只动手腕往上卷。练前臂内侧' },
+  { id: 'bb-reverse-wrist-curl', name: '反握腕弯举', muscleGroup: 'arms', equipment: '杠铃', isCustom: false, note: '手心朝下，只动手腕往上抬。练前臂外侧' },
+
+  // ---------------- 核心（20 个）----------------
+  //
+  // 前 5 个是 2026-09-23 最初那批，id 不许改。后 15 个是 2026-09-24 扩充的。
+  // 排法：先机器（好加重量）→ 绳索（能调角度）→ 徒手（按难度递增）
   { id: 'bw-plank', name: '平板支撑', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '肘在肩正下方，屁股别塌也别翘。重量填 0，次数填坚持的秒数' },
   { id: 'bw-crunch', name: '卷腹', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '下巴别压胸口，靠腹部把肩胛卷离地面。重量填 0' },
   { id: 'bw-hanging-leg-raise', name: '悬垂举腿', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '吊在单杠上，腿抬到和地面平行。重量填 0' },
   { id: 'cable-crunch', name: '绳索卷腹', muscleGroup: 'core', equipment: '绳索', isCustom: false, note: '跪姿，用腹肌把上半身往下卷，不是用手臂拉' },
   { id: 'bw-russian-twist', name: '俄罗斯转体', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '坐姿上半身略微后仰，左右转动躯干。重量填 0' },
+
+  // ---- 2026-09-24 扩充（15 个）----
+  // 器械
+  { id: 'mach-ab-crunch', name: '卷腹机', muscleGroup: 'core', equipment: '固定器械', isCustom: false, note: '坐进机器，胸口顶着垫子往下卷。比徒手卷腹好加重量' },
+  { id: 'mach-torso-rotation', name: '躯干旋转机', muscleGroup: 'core', equipment: '固定器械', isCustom: false, note: '坐着，上半身左右转。练腹斜肌' },
+  { id: 'mach-side-bend', name: '器械侧屈', muscleGroup: 'core', equipment: '固定器械', isCustom: false, note: '身体往一侧弯下去再起来，练腹斜肌。只记一侧的重量' },
+  // 绳索
+  { id: 'cable-woodchop', name: '绳索伐木', muscleGroup: 'core', equipment: '绳索', isCustom: false, note: '滑轮调高，双手拉着绳索从斜上往斜下劈。练腹斜肌' },
+  { id: 'cable-pallof-press', name: '帕洛夫推', muscleGroup: 'core', equipment: '绳索', isCustom: false, note: '侧对滑轮，双手把绳索往前推出去，抗住身体被带着转。练核心抗旋转' },
+  // 徒手（大致从易到难）
+  { id: 'bw-side-plank', name: '侧平板支撑', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '侧躺用手肘撑地，身体撑成一条直线。重量填 0，次数填坚持的秒数' },
+  { id: 'bw-lying-leg-raise', name: '仰卧举腿', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '躺平，双腿并拢抬到垂直再慢慢放下。重量填 0' },
+  { id: 'bw-reverse-crunch', name: '反向卷腹', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '躺平，用腹部把屁股卷离地面、膝盖往胸口收。重量填 0' },
+  { id: 'bw-side-crunch', name: '侧腹卷腹', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '侧躺，用一侧的腹斜肌把身体卷起来。只记一侧。重量填 0' },
+  { id: 'bw-bicycle-crunch', name: '自行车卷腹', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '躺着，对侧手肘去碰对侧膝盖，像蹬自行车。重量填 0' },
+  { id: 'bw-dead-bug', name: '死虫', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '躺着四肢朝上，对侧的手和脚同时伸出去再收回。练核心稳定。重量填 0' },
+  { id: 'bw-hanging-knee-raise', name: '悬垂屈膝抬腿', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '吊在单杠上，膝盖往胸口收。比直腿版容易，是悬垂举腿的前置。重量填 0' },
+  { id: 'bw-back-extension', name: '山羊挺身', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '罗马椅上脚固定住，上半身往下再起来。练下背和臀。重量填 0' },
+  { id: 'bw-ab-wheel', name: '健腹轮', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '跪着双手握住健腹轮往前推出去再收回来。腰别塌。重量填 0' },
+  { id: 'bw-dragon-flag', name: '龙旗', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '躺着抓住固定物，身体像旗子一样笔直抬起放下。非常硬核，先练慢慢放下那半程' },
 
   // ---------------- 有氧（11 个）----------------
   //
