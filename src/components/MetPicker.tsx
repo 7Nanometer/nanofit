@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { StrengthMetLevel } from '../types'
+import { formatDuration } from '../lib/calc'
 import { STRENGTH_MET_INFO, metLabel } from '../lib/kcal'
+import { StartTimeEditor } from './StartTimeEditor'
 
 // ============================================================
 // 结束训练时问一句"这次练得有多累"
@@ -52,6 +54,15 @@ type Props = {
   // 上次"结束训练"时选的那一档。
   // 只用来做一个"沿用上次"的快捷按钮 —— 点了才选中，绝不自作主张。
   lastLevel?: StrengthMetLevel | undefined
+  // 这次训练一共多久（秒）。null = 算不出来（老记录没开始时间）。
+  // ★ 这个数必须是"最后真会存进去的那个"——由训练页用冻结的结束时刻算好传进来。
+  durationSec: number | null
+  // 这次的开始时刻（ISO）。undefined = 没记，那就不显示修正入口
+  startedAt?: string | undefined
+  // 最晚允许的开始时刻（不能晚于第一组）。见 StartTimeEditor
+  latestStartISO?: string | undefined
+  // 用户改了开始时间。训练页拿这个去更新正在进行的训练
+  onChangeStart: (iso: string) => void
   // 这次练了什么，如"共 12 组力量 + 有氧 20 分钟"
   summary: string
   onConfirm: (level: StrengthMetLevel) => void
@@ -62,6 +73,10 @@ export function MetPicker({
   recommended,
   reason,
   lastLevel,
+  durationSec,
+  startedAt,
+  latestStartISO,
+  onChangeStart,
   summary,
   onConfirm,
   onCancel,
@@ -93,6 +108,31 @@ export function MetPicker({
           <span className="text-ink-2">这一项只影响热量估算</span>
           ，不影响记录本身。
         </p>
+
+        {/* ---------- 本次训练多久 / 从几点开始（★ 2026-09-24 加的）----------
+            加这块的直接原因：用户几点开始热身，App 是猜不到的 ——
+            它自动记的是"第一次掏出手机加动作"那一刻，前面热身的十几分钟
+            会丢。而时长是热量公式的乘数，少记了就少算。
+
+            为什么放在这个面板里：结束训练时人本来就要操作一次 App，
+            顺手把开始时间改了，不需要另外记住去点什么东西。
+            为什么不做成"开始计时"按钮：那样会忘，一忘就是整场没计时；
+            自动开始最多差十几分钟，而且随时能改。 */}
+        <div className="mb-3 rounded-lg border border-line bg-bg p-3">
+          <div className="text-sm text-ink">
+            本次训练{' '}
+            <span className="font-semibold">
+              {durationSec === null ? '算不出来' : formatDuration(durationSec)}
+            </span>
+          </div>
+          {startedAt !== undefined && (
+            <StartTimeEditor
+              startedAt={startedAt}
+              latestStartISO={latestStartISO}
+              onChangeStart={onChangeStart}
+            />
+          )}
+        </div>
 
         {/* ---------- 系统建议（整块，不是小标签）---------- */}
         <div className="mb-3 rounded-lg border border-brand bg-brand/10 p-3">

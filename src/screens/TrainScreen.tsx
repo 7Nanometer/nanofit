@@ -491,6 +491,19 @@ export function TrainScreen() {
     syncRestNotify()
   }
 
+  // ---------- 改这次训练的开始时间 ----------
+  //
+  // 用户热身了多久 App 猜不到，只能让他自己往回推（见 StartTimeEditor）。
+  //
+  // ★ 只改"正在进行的这一次"。已经存进历史的那条不会跟着变 ——
+  //   和"老记录不重算档位"是同一个规矩。
+  // ★ 每改一次都立刻落盘：万一下一秒 App 被系统杀掉，这次改动不会丢，
+  //   而且面板上的时长是照着 session 现算的，所以会跟着一起变。
+  function changeStart(iso: string) {
+    if (session === null) return
+    persist({ ...session, startedAt: iso })
+  }
+
   // ---------- 丢掉这次"忘了结束"的训练 ----------
   //
   // 和"清空"是两回事：清空针对的是刚新建、还没记东西的会话；
@@ -647,6 +660,23 @@ export function TrainScreen() {
     endSession()
     setMetPickerOpen(false)
   }
+
+  // ---------- 结束面板要用的两个数 ----------
+  //
+  // 【时长必须和最后落盘的是同一个】用冻结的结束时刻算，不在这里现读表 ——
+  // 面板开着的时候用户可能磨蹭几分钟，现读会让"面板上写的"和"存进去的"
+  // 对不上。（这就是第 1 步里那个 finishEndISO 的用途。）
+  //
+  // 每一步都是纯的：completedSession 里那两个函数只看传进去的时刻，
+  // 不读当前时间。所以放在渲染里算是安全的。
+  const finishDurationSec =
+    session !== null && finishEndISO !== null
+      ? (completedSession(session, finishEndISO).durationSec ?? null)
+      : null
+
+  // 开始时间最晚能改到什么时候：**不能晚于第一组** ——
+  // 开始时间跑到第一组后面就说不通了。一组都还没记时退回冻结的结束时刻。
+  const latestStartISO = entries[0]?.completedAt ?? finishEndISO ?? undefined
 
   // ---------- 练完忘了点"结束训练"？----------
   //
@@ -884,6 +914,10 @@ export function TrainScreen() {
           recommended={recommendation.level}
           reason={recommendation.reason}
           lastLevel={lastMetLevel}
+          durationSec={finishDurationSec}
+          startedAt={session.startedAt}
+          latestStartISO={latestStartISO}
+          onChangeStart={changeStart}
           summary={finishSummary}
           onConfirm={saveWorkout}
           onCancel={() => setMetPickerOpen(false)}
