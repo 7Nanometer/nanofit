@@ -1,6 +1,6 @@
 import type { BodyMetric, SetEntry, WorkoutSession } from '../types'
 import { estimate1RM, sessionVolume, setVolume } from './calc'
-import { dateKey, parseDateKey } from './date'
+import { dateKey, parseDateKey, shiftDays } from './date'
 import { sessionKcalSplit } from './kcal'
 
 // ============================================================
@@ -123,6 +123,109 @@ export function exerciseSeries(
 
   // 按日期从早到晚排：图表的左边是过去，右边是现在，一眼看出进步
   return points.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+// ---------- 估算 1RM 的"能力曲线" ----------
+//
+// 【它和上面 exerciseSeries 的区别，就是这一节存在的全部理由】
+//
+// exerciseSeries 里的 best1RM 是"**当天**最好的一组反推出的重量"。
+// 那画出来的是"当天怎么练的"，不是"能力的变化"：
+// 今天冲大重量，点就高；明天小重量多组，点就低。
+// 同一个人练法一变曲线就抖，根本看不出进步 —— 而看出进步正是
+// 这张图唯一的用处。
+//
+// 下面这个算的是"**最近大概能举多少**"：每天的值是从那天往前数
+// 90 天里最好的成绩。练法怎么变都影响不大，只有真的变强了曲线才动。
+
+// 只统计次数 ≤ 12 的组。
+//
+// calc.ts 里 estimate1RM 的注释一直写着"参考价值主要在 12 次以内"，
+// 但代码从来没执行过这一条。后果很实在：70kg 做 20 次会推出 116kg，
+// 可那个人根本举不起 116kg 一次 —— 这种虚高的点会把整条曲线带偏。
+export const ONE_RM_MAX_REPS = 12
+
+// 主曲线每次往前回顾多少天
+export const ONE_RM_WINDOW_DAYS = 90
+
+// 至少要几个数据点才值得画曲线。
+// 一个点连不成线；两个点连起来是条直线，看着像趋势，其实什么都不是。
+export const ONE_RM_MIN_POINTS = 3
+
+export type OneRmPoint = {
+  date: string // 完整日期，用来排序
+  label: string // 横轴上显示的短日期，如 '9/23'
+  oneRm: number // 截至这天、最近 90 天内的最好水平
+  pr: number // 截至这天、历史上的最高（只升不降，所以是阶梯）
+}
+
+// 保留一位小数。101.33333 显示成 101.3，够用且不啰嗦。
+function round1(n: number): number {
+  return Math.round(n * 10) / 10
+}
+
+// 某个动作的"能力曲线"。参数是已经分好的"只有力量"那一份。
+export function oneRmSeries(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+): OneRmPoint[] {
+  // 第一步：把这个动作所有"有效组"挑出来，按日期排好
+  const valid: { date: string; oneRm: number }[] = []
+  for (const session of sessions) {
+    for (const entry of session.entries) {
+      if (entry.exerciseId !== exerciseId) continue
+      // 重量是 0 的组排除：引体向上、平板支撑这类自重动作记的是
+      // "0 kg × 次数"，推出来永远是 0，留在图上只是一条贴着底的假线。
+      // （真想记录负重的引体，就把腰带上挂的重量填进去。）
+      // 顺带一提，有氧记录的重量和次数也都是 0，所以这里天然把有氧挡在外面了。
+      if (entry.weightKg <= 0) continue
+      // 次数不在 1~12 之间的排除，原因见上面 ONE_RM_MAX_REPS 的说明
+      if (entry.reps < 1 || entry.reps > ONE_RM_MAX_REPS) continue
+      valid.push({
+        date: session.date,
+        oneRm: estimate1RM(entry.weightKg, entry.reps),
+      })
+    }
+  }
+  if (valid.length === 0) return []
+
+  // 字符串比日期：'2026-09-24' 这种写法按文字比就等于按时间比
+  valid.sort((a, b) => a.date.localeCompare(b.date))
+
+  // 第二步：他练过这个动作的每一个日子，出一个点。
+  // 用 Set 去重 —— 同一天练了 5 组也只是图上的一个点。
+  const dates = [...new Set(valid.map((v) => v.date))].sort()
+
+  const points: OneRmPoint[] = []
+  // PR 线要"只升不降"，所以它在循环外面累积，不重新算。
+  // 正因为不重新算，它天然是阶梯形的。
+  let pr = 0
+
+  for (const date of dates) {
+    const windowFrom = shiftDays(date, -ONE_RM_WINDOW_DAYS)
+    let best = 0
+
+    // valid 已经按日期排好，所以碰到第一条"晚于今天"的就可以停 ——
+    // 往后都是未来的数据，不该影响今天这个点。
+    //
+    // 【这里每次从头发扫，会不会慢】
+    // 会，但无所谓：一个人练三年的卧推也就一两百组，最坏情况下
+    // 也就万把次比较，几毫秒的事。写清楚比写快重要。
+    for (const v of valid) {
+      if (v.date > date) break
+      if (v.oneRm > pr) pr = v.oneRm
+      if (v.date >= windowFrom && v.oneRm > best) best = v.oneRm
+    }
+
+    points.push({
+      date,
+      label: shortLabel(date),
+      oneRm: round1(best),
+      pr: round1(pr),
+    })
+  }
+
+  return points
 }
 
 // ---------- 身体数据趋势（折线图用）----------

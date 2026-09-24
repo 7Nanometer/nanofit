@@ -64,6 +64,24 @@ export function isToday(key: string): boolean {
   return key === todayKey()
 }
 
+// 把日期往前/往后挪 N 天。'2026-09-24' 往前 90 天 → '2026-06-26'。
+//
+// 【为什么不直接 d.setDate(d.getDate() - n) 完事】
+// 那样得先有 Date 对象；而且这个操作要做很多次（统计里每个数据点一次），
+// 每次都要 parse → 加天数 → 格式化回去。封成一个函数，调用处只写一句。
+//
+// 【为什么走 parseDateKey 而不是 Date.parse】
+// 和上面所有的日期函数一个道理：'2026-09-24' 是**本地日期**，
+// 用 Date.parse 会当成格林威治时间，差 8 小时，凌晨那会儿会算错一天。
+// parseDateKey 是"分别传年月日"的写法，按本地时间算，才是对的。
+//
+// 天数可以是负数（往后挪）。跨月份、跨年份、闰年都由 Date 自己算，不用操心。
+export function shiftDays(key: string, days: number): string {
+  const d = parseDateKey(key)
+  d.setDate(d.getDate() + days)
+  return dateKey(d)
+}
+
 // ---------- 算两个"绝对时刻"之间差了多少 ----------
 //
 // 【它和上面那些函数的区别，一定要看清】
