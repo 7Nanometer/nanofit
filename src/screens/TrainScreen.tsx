@@ -229,6 +229,16 @@ export function TrainScreen() {
     reason: '',
   })
 
+  // "上次用的档位"，面板上那个「沿用上次」按钮要用。undefined = 从来没选过。
+  //
+  // 【为什么不直接用 settings.lastMetLevel】
+  // settings 是训练页挂载时读一次的。你要是这一次打开 App 里练了两场，
+  // 第二场时它还是第一场【之前】的旧值 —— "沿用上次"就会给你一个更早的
+  // 档位，而那才是真正的"上次"。所以在点"结束训练"那一刻现读一次。
+  const [lastMetLevel, setLastMetLevel] = useState<StrengthMetLevel | undefined>(
+    undefined,
+  )
+
   // 先存进储物柜，再更新界面。所有改动数据的操作都走这一个出口。
   function persist(next: WorkoutSession) {
     const ok = writeActiveWorkout(next)
@@ -487,6 +497,9 @@ export function TrainScreen() {
       // ★ 用 completedSession() 补好时长再推荐 —— 这样推荐和落盘
       //   用的是同一个时长，不会在 30 分钟这种分界线上打架
       setRecommendation(recommendMetLevel(completedSession(session), cardioIds))
+        // 顺便把"上次用的档位"现读一份，给面板上的「沿用上次」按钮。
+        // 用 readSettings() 而不是上面那个 settings state —— 后者可能已经过时。
+        setLastMetLevel(readSettings().lastMetLevel)
       setMetPickerOpen(true)
       return
     }
@@ -724,10 +737,14 @@ export function TrainScreen() {
 
       {metPickerOpen && session !== null && (
         <MetPicker
+          // ★ 面板默认选中的永远是"系统本次推荐的"那一档。
+          //   以前这里传的是 settings.lastMetLevel ?? recommendation.level，
+          //   也就是"上次选的"永远赢 —— 一次选错就永久沿用，
+          //   有人 16 组大重量被按低强度算热量就是这么来的。
+          //   要沿用上次，改成面板里那个"沿用上次"按钮，由用户自己点。
           recommended={recommendation.level}
-          // 第一次用（没选过）就用推荐值；之后默认用上次选的。
-          // 两句话都要满足，所以界面上还会标出"建议"哪一档。
-          defaultLevel={settings.lastMetLevel ?? recommendation.level}
+          reason={recommendation.reason}
+          lastLevel={lastMetLevel}
           summary={finishSummary}
           onConfirm={saveWorkout}
           onCancel={() => setMetPickerOpen(false)}
