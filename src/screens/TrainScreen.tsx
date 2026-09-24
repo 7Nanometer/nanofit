@@ -363,14 +363,32 @@ export function TrainScreen() {
     })
   }
 
+  // ---------- 这次训练收摊 ----------
+  //
+  // 所有"训练结束"的出口都走这一个函数，因为收摊要做的不止一件事。
+  //
+  // ★ 必须顺手把休息倒计时也清掉。
+  //   不然会出这么一幕：你在最后一组点完 ✓（倒计时自动开始），
+  //   紧接着点"结束训练"——训练是结束了，可"休息中 1:23"还赖在页面上，
+  //   而且到点还会响一声、那段时间屏幕也一直被挂着不让熄灭。
+  //   训练都结束了，哪还有"组间休息"这回事。
+  //
+  // 【为什么抽成一个函数，而不是在两处各写三行】
+  //   写两遍的话，哪天再加一个"结束训练"的入口（或者再加一件收摊要做的事），
+  //   一定会漏掉其中一处 —— 这次这个 bug 就是这么来的。
+  function endSession() {
+    clearActiveWorkout()
+    setSession(null)
+    setRestEndsAt(null)
+  }
+
   // ---------- 结束训练 ----------
   function finishWorkout() {
     if (!session) return
 
     // 一组都没记：直接丢弃，不往历史里塞空记录，也不用问
     if (session.entries.length === 0) {
-      clearActiveWorkout()
-      setSession(null)
+      endSession()
       return
     }
 
@@ -448,8 +466,7 @@ export function TrainScreen() {
       writeSettings({ ...readSettings(), lastMetLevel: metLevel })
     }
 
-    clearActiveWorkout()
-    setSession(null)
+    endSession()
     setMetPickerOpen(false)
   }
 
