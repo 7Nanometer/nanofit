@@ -441,7 +441,7 @@ export function TrainScreen() {
         }}
         className="mt-2 w-full rounded-xl border border-dashed border-line py-4 text-sm text-ink-2"
       >
-        + 记有氧（跑步机 / 椭圆机 / 户外跑…）
+        + 记有氧
       </button>
 
       {/* 一键套用模板：自动把一整套动作和目标组数次数填进来 */}
@@ -450,7 +450,7 @@ export function TrainScreen() {
         onClick={() => setTemplatePickerOpen(true)}
         className="mt-2 w-full rounded-xl border border-dashed border-line py-4 text-sm text-ink-2"
       >
-        套用模板（推日 / 拉日 / 腿日）
+        套用模板
       </button>
 
       {pickerOpen && (

@@ -11,7 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { BodyMetric, Exercise, WorkoutSession } from '../types'
-import { mergeExercises } from '../data/exercises'
+import { cardioIdSet, mergeExercises } from '../data/exercises'
 import {
   readBodyMetrics,
   readCustomExercises,
@@ -19,17 +19,20 @@ import {
 } from '../lib/storage'
 import {
   bodySeries,
+  cardioDistanceSeries,
   exerciseSeries,
   lastSessionDate,
   lastSessionVolume,
   niceAxis,
+  splitSessions,
+  thisWeekCardioSec,
   thisWeekCount,
   thisWeekVolume,
   usedExerciseIds,
   weeklyVolumes,
 } from '../lib/stats'
-import type { ExercisePoint } from '../lib/stats'
 import { formatDateCN } from '../lib/date'
+import { formatDuration } from '../lib/calc'
 import { ChartCard } from '../components/ChartCard'
 import { StatTile } from '../components/StatTile'
 import { chartColors } from '../lib/theme'
@@ -98,16 +101,39 @@ export function StatsScreen() {
 
   const allExercises = mergeExercises(customExercises)
 
-  // 下拉框里只列"真的练过"的动作。40 个全列出来，选到没练过的会是一张空图。
-  const usedIds = usedExerciseIds(sessions)
-  const usedExercises = allExercises.filter((e) => usedIds.includes(e.id))
+  // ---------- 力量和有氧分成两条线 ----------
+  //
+  // 【为什么必须分】
+  // 有氧记录的 weightKg 和 reps 都是 0（见 types.ts 的说明）。混进力量统计
+  // 的话，周容量会被拉平、单动作曲线会冒出一串贴在 0 上的点。
+  //
+  // 【分完之后的规矩】
+  //   下面凡是"容量 / 最大重量 / 1RM"的图，一律只吃 lifting 那一份。
+  //   有氧的数据在最下面单独有一块。
+  const cardioIds = cardioIdSet(allExercises)
+  const { lifting, cardio } = splitSessions(sessions, cardioIds)
 
-  // 当前选中的动作，默认选第一个练过的
-  const [selectedId, setSelectedId] = useState(usedIds[0] ?? '')
+  // 下拉框里只列"真的练过"的动作。全列出来会很长，而且选到没练过的是一张空图。
+  //
+  // ★ 有氧动作也要排除：它们的重量永远是 0，选进去就是一条贴着底的直线。
+  //   有氧的数据在最下面单独看。
+  const usedIds = usedExerciseIds(lifting)
+  const usedExercises = allExercises.filter(
+    (e) => usedIds.includes(e.id) && !cardioIds.has(e.id),
+  )
 
-  const weeks = weeklyVolumes(sessions, 8)
-  const points = selectedId === '' ? [] : exerciseSeries(sessions, selectedId)
+  // 当前选中的动作，默认选第一个练过的。
+  // 注意不能写成 usedIds[0] —— 那个可能是个有氧动作，下拉框里根本没有它，
+  // 选中的会是一个不存在的选项，界面上显示成空白。
+  const [selectedId, setSelectedId] = useState(usedExercises[0]?.id ?? '')
+
+  const weeks = weeklyVolumes(lifting, 8)
+  const points = selectedId === '' ? [] : exerciseSeries(lifting, selectedId)
   const body = bodySeries(bodyMetrics)
+
+  // 有氧那两块（只统计有氧记录，一条力量都不掺）
+  const cardioSec = thisWeekCardioSec(cardio)
+  const cardioPoints = cardioDistanceSeries(cardio)
 
   // 柱状图的纵轴刻度。第二个参数 true = 一定要含 0 ——
   // 柱状图里"柱子的高度"直接表示大小，不從 0 起的话比例是骗人的。
@@ -141,121 +167,182 @@ export function StatsScreen() {
     <div>
       <h1 className="mb-4 text-2xl font-bold">统计</h1>
 
-      {/* ---------- 1. 顶部两个大数字 ---------- */}
+      {/* ---------- 1. 顶部两个大数字 ----------
+          两个都用 lifting（只含力量的那一份），所以数字里一点有氧都不掺。
+
+          "练了 N 次"数的是**全部**训练，包括只跑了步没撸铁的那些天 ——
+          跑了步也算练了一次，不该被漏掉。 */}
       <div className="mb-3 flex gap-2">
         <StatTile
           label="本周总容量"
-          value={thisWeekVolume(sessions).toLocaleString()}
+          value={thisWeekVolume(lifting).toLocaleString()}
           hint={`kg · 练了 ${thisWeekCount(sessions)} 次`}
         />
         <StatTile
           label="最近一次"
-          value={lastSessionVolume(sessions).toLocaleString()}
-          hint={`kg · ${formatDateCN(lastSessionDate(sessions))}`}
+          value={lastSessionVolume(lifting).toLocaleString()}
+          hint={
+            lifting.length > 0
+              ? `kg · ${formatDateCN(lastSessionDate(lifting))}`
+              : 'kg · 还没有力量记录'
+          }
         />
       </div>
 
-      {/* ---------- 2. 每周总容量 ---------- */}
-      <ChartCard
-        title="每周总容量"
-        subtitle="最近 8 周，每周练的总量（kg）"
-        rows={weeks.map((w) => ({
-          周: w.label,
-          容量: w.volume.toLocaleString(),
-        }))}
-        columns={[
-          { key: '周', label: '那一周（周一的日期）' },
-          { key: '容量', label: '总容量 kg' },
-        ]}
-      >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={weeks}
-            // 【这个 left 不能是负数】留不出空间的话，纵轴上「12,000」这种
-            // 五位数的标签会被切掉左边一位，显示成「2,000」——
-            // 数字看着没毛病，但整整少了一位，很难发现。
-            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
-            <XAxis dataKey="label" stroke={C.muted} fontSize={11} tickLine={false} />
-            <YAxis
-              stroke={C.muted}
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={formatAxis}
-              domain={weeksAxis.domain}
-              ticks={weeksAxis.ticks}
-              width={52}
-            />
-            <Tooltip
-              {...tooltipStyle(C)}
-              formatter={(value) => [
-                `${Number(value).toLocaleString()} kg`,
-                '总容量',
-              ]}
-              labelFormatter={(label) => `${String(label)} 那一周`}
-            />
-            <Bar dataKey="volume" fill={C.brand} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      {/* ---------- 2. 每周总容量 ----------
+          一条力量记录都没有时不画：8 根高度为 0 的柱子配上一条
+          从 -1 到 1 的刻度，看着就像 App 坏了，不如什么都不显示。 */}
+      {lifting.length > 0 && (
+        <ChartCard
+          title="每周总容量"
+          subtitle="最近 8 周，每周练的总量（kg）。只算力量训练，有氧不算进来。"
+          rows={weeks.map((w) => ({
+            周: w.label,
+            容量: w.volume.toLocaleString(),
+          }))}
+          columns={[
+            { key: '周', label: '那一周（周一的日期）' },
+            { key: '容量', label: '总容量 kg' },
+          ]}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={weeks}
+              // 【这个 left 不能是负数】留不出空间的话，纵轴上「12,000」这种
+              // 五位数的标签会被切掉左边一位，显示成「2,000」——
+              // 数字看着没毛病，但整整少了一位，很难发现。
+              margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={C.line}
+                vertical={false}
+              />
+              <XAxis
+                dataKey="label"
+                stroke={C.muted}
+                fontSize={11}
+                tickLine={false}
+              />
+              <YAxis
+                stroke={C.muted}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatAxis}
+                domain={weeksAxis.domain}
+                ticks={weeksAxis.ticks}
+                width={52}
+              />
+              <Tooltip
+                {...tooltipStyle(C)}
+                formatter={(value) => [
+                  `${Number(value).toLocaleString()} kg`,
+                  '总容量',
+                ]}
+                labelFormatter={(label) => `${String(label)} 那一周`}
+              />
+              <Bar dataKey="volume" fill={C.brand} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      )}
 
-      {/* ---------- 3. 单个动作的进步 ---------- */}
-      <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">
-        单个动作的进步
-      </h2>
-
-      <select
-        value={selectedId}
-        onChange={(e) => setSelectedId(e.target.value)}
-        className="mb-3 w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-brand"
-      >
-        {usedExercises.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-          </option>
-        ))}
-      </select>
-
-      {points.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted">
-          这个动作还没有记录
-        </p>
-      ) : (
+      {/* ---------- 3. 单个动作的进步 ----------
+          一个力量动作都没练过（比如刚装了 App 只跑过步）时，整块不显示 ——
+          显示一个没有选项的下拉框只会让人以为坏了。 */}
+      {usedExercises.length > 0 && (
         <>
-          <ProgressChart
-            points={points}
-            dataKey="maxWeight"
-            title="最大重量"
-            subtitle={`${selectedName} · 每次练到的最重那一下（kg）`}
-            unit="kg"
-            columnLabel="最大重量"
-            color={C.brand}
-          />
-          <ProgressChart
-            points={points}
-            dataKey="volume"
-            title="总容量"
-            subtitle={`${selectedName} · 每次练的总量（kg）`}
-            unit="kg"
-            columnLabel="总容量"
-            color={C.chart2}
-            startFromZero
-          />
-          <ProgressChart
-            points={points}
-            dataKey="best1RM"
-            title="估算 1RM"
-            subtitle={`${selectedName} · 由当天最好的一组反推的一次极限重量（kg）`}
-            unit="kg"
-            columnLabel="估算 1RM"
-            color={C.chart3}
-          />
+          <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">
+            单个动作的进步
+          </h2>
+
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="mb-3 w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-brand"
+          >
+            {usedExercises.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
+
+          {points.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">
+              这个动作还没有记录
+            </p>
+          ) : (
+            <>
+              <ProgressChart
+                points={points}
+                dataKey="maxWeight"
+                title="最大重量"
+                subtitle={`${selectedName} · 每次练到的最重那一下（kg）`}
+                unit="kg"
+                columnLabel="最大重量"
+                color={C.brand}
+              />
+              <ProgressChart
+                points={points}
+                dataKey="volume"
+                title="总容量"
+                subtitle={`${selectedName} · 每次练的总量（kg）`}
+                unit="kg"
+                columnLabel="总容量"
+                color={C.chart2}
+                startFromZero
+              />
+              <ProgressChart
+                points={points}
+                dataKey="best1RM"
+                title="估算 1RM"
+                subtitle={`${selectedName} · 由当天最好的一组反推的一次极限重量（kg）`}
+                unit="kg"
+                columnLabel="估算 1RM"
+                color={C.chart3}
+              />
+            </>
+          )}
         </>
       )}
 
-      {/* ---------- 4. 身体数据 ---------- */}
+      {/* ---------- 4. 有氧 ----------
+          只有记过有氧才显示这一块。
+
+          【为什么单独一节，不并进上面的图】
+          单位不一样：力量那边是 kg，这边是分钟和公里。硬画在一张图上，
+          数值差着好几个数量级，会互相压平（这也是这个项目"一张图只画
+          一个指标"的由来）。 */}
+      {(cardioSec > 0 || cardioPoints.length > 0) && (
+        <>
+          <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">有氧</h2>
+
+          <div className="mb-3 flex gap-2">
+            <StatTile
+              label="本周有氧"
+              value={formatDuration(cardioSec)}
+              hint="总时长"
+            />
+          </div>
+
+          {cardioPoints.length > 0 && (
+            <ProgressChart
+              points={cardioPoints}
+              dataKey="km"
+              title="单次距离"
+              subtitle="每次有氧的距离（公里）。没填距离的那些次不会画上来。"
+              unit="公里"
+              columnLabel="距离"
+              color={C.chart2}
+              startFromZero
+            />
+          )}
+        </>
+      )}
+
+      {/* ---------- 5. 身体数据 ---------- */}
       {(hasWeight || hasFat || hasHeight) && (
         <>
           <h2 className="mb-2 mt-5 text-sm font-medium text-ink-2">
@@ -298,7 +385,7 @@ export function StatsScreen() {
 // 三张（重量 / 容量 / 1RM）长得一模一样，只是数据列不同，
 // 所以抽成一个组件，不用把同样的配置抄三遍。
 
-function ProgressChart({
+function ProgressChart<T extends { label: string }>({
   points,
   dataKey,
   title,
@@ -308,8 +395,14 @@ function ProgressChart({
   color,
   startFromZero = false,
 }: {
-  points: ExercisePoint[]
-  dataKey: 'maxWeight' | 'volume' | 'best1RM'
+  points: T[]
+  // 泛型 T 表示"这一张图画的是哪种数据"。dataKey 必须是 T 里面真的有的字段名，
+  // 写错一个字母编译就会报错 —— 比运行时画出一张空图强。
+  //
+  // 【为什么不用原来写死的 'maxWeight' | 'volume' | 'best1RM'】
+  // 加了有氧之后，这张图还要画"单次距离"（字段名是 km），
+  // 写死的联合类型装不下它。改成泛型，力量的三个调用点一个字都不用改。
+  dataKey: Extract<keyof T, string>
   title: string
   subtitle: string
   unit: string
@@ -322,8 +415,11 @@ function ProgressChart({
   const [C] = useState(chartColors)
   // 纵轴刻度：容量那种"从 0 起才有意义"的传 startFromZero=true，
   // 重量和 1RM 不传，让轴贴着数据走（80 涨到 85 这种进步才看得出来）
+  //
+  // Number(...) 是把值转成数字再交给刻度算法。泛型 T 的字段类型
+  // TypeScript 推不出来一定是数字，而这里的字段确实都是数字，转一下最省事。
   const axis = niceAxis(
-    points.map((p) => p[dataKey]),
+    points.map((p) => Number(p[dataKey])),
     startFromZero,
   )
 
@@ -333,7 +429,7 @@ function ProgressChart({
       subtitle={subtitle}
       rows={points.map((p) => ({
         日期: p.label,
-        [columnLabel]: `${p[dataKey].toLocaleString()} ${unit}`,
+        [columnLabel]: `${Number(p[dataKey]).toLocaleString()} ${unit}`,
       }))}
       columns={[
         { key: '日期', label: '日期' },

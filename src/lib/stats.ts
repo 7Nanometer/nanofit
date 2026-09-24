@@ -267,3 +267,78 @@ export function niceAxis(
 
   return { domain: [Number(start.toFixed(6)), Number(end.toFixed(6))], ticks }
 }
+
+// ============================================================
+// 有氧
+// ============================================================
+
+// 把训练记录分成"只有力量"和"只有有氧"两份。
+//
+// 【为什么要分】
+// 有氧记录的 weightKg 和 reps 都是 0（见 types.ts 的说明）。让它们混进
+// 力量统计的话，单动作曲线会冒出一堆 0，周容量图也会被拉平。
+//
+// 【为什么在这里分一次，而不是在每个统计函数里各判断一次】
+// 那样上面那 5 个函数全都得加一个"哪些是有氧"的参数、全都要改签名。
+// 在这里分一次，它们一个字都不用动，照常吃"干净的"数据。
+export function splitSessions(
+  sessions: WorkoutSession[],
+  cardioIds: Set<string>,
+): { lifting: WorkoutSession[]; cardio: WorkoutSession[] } {
+  const pick = (keep: (exerciseId: string) => boolean) =>
+    sessions
+      .map((s) => ({
+        ...s,
+        entries: s.entries.filter((e) => keep(e.exerciseId)),
+      }))
+      // 分完一条不剩的整场直接扔掉。
+      // 留着的话，"最近一次"会指向一个只剩 0 的日期，看着莫名其妙。
+      .filter((s) => s.entries.length > 0)
+
+  return {
+    lifting: pick((id) => !cardioIds.has(id)),
+    cardio: pick((id) => cardioIds.has(id)),
+  }
+}
+
+// 本周有氧一共多少秒。参数是 splitSessions 分出来的那一份。
+export function thisWeekCardioSec(cardioSessions: WorkoutSession[]): number {
+  const mondayKey = dateKey(mondayOf(new Date()))
+  return cardioSessions
+    .filter((s) => s.date >= mondayKey)
+    .reduce(
+      (sum, s) =>
+        sum + s.entries.reduce((t, e) => t + (e.durationSec ?? 0), 0),
+      0,
+    )
+}
+
+// 一次有氧 = 图上的一条记录
+export type CardioPoint = {
+  date: string
+  label: string // 横轴上显示的短日期，如 '9/24'
+  km: number // 距离，公里，保留两位小数
+}
+
+// "单次距离趋势"那张图的数据。
+//
+// 【为什么只挑填了距离的】
+// 跑步机上只看时间不看距离的人，记出来的记录没有距离。
+// 硬把它们当成 0 画上去，图上会出现一串莫名其妙的下探到 0 的点 ——
+// 那不是"跑了 0 公里"，是"没记距离"。宁可少画几个点。
+export function cardioDistanceSeries(
+  cardioSessions: WorkoutSession[],
+): CardioPoint[] {
+  const points: CardioPoint[] = []
+  for (const session of cardioSessions) {
+    for (const entry of session.entries) {
+      if (entry.distanceM === undefined) continue
+      points.push({
+        date: session.date,
+        label: shortLabel(session.date),
+        km: Math.round((entry.distanceM / 1000) * 100) / 100,
+      })
+    }
+  }
+  return points.sort((a, b) => a.date.localeCompare(b.date))
+}
