@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type {
+  BodyMetric,
   Exercise,
   PlannedItem,
   SetEntry,
@@ -18,10 +19,11 @@ import {
   textToNumber,
 } from '../lib/calc'
 import { unlockAudio } from '../lib/beep'
-import { sessionSeconds } from '../lib/kcal'
+import { resolveWeightKg, sessionSeconds } from '../lib/kcal'
 import {
   clearActiveWorkout,
   readActiveWorkout,
+  readBodyMetrics,
   readCustomExercises,
   readSessions,
   readSettings,
@@ -58,6 +60,8 @@ export function TrainScreen() {
   const [customExercises] = useState<Exercise[]>(readCustomExercises)
   const [settings] = useState<Settings>(readSettings)
   const [customTemplates] = useState<Template[]>(readTemplates)
+  // 体重是给有氧录入面板算热量估算用的。训练页自己不用，只是读出来传下去。
+  const [bodyMetrics] = useState<BodyMetric[]>(readBodyMetrics)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
   const [storageError, setStorageError] = useState(false)
@@ -251,6 +255,10 @@ export function TrainScreen() {
     setRestEndsAt(Date.now() + settings.restSec * 1000)
   }
 
+  // 算热量估算用的体重。优先「身体数据」里最近一次，没记过才用设置里那个默认值。
+  // 两个都没有就是 undefined —— 那时不显示热量，并提示去哪填。
+  const weightKg = resolveWeightKg(bodyMetrics, settings)
+
   // ---------- 记一次有氧 ----------
   //
   // 【为什么它和上面的 addSet 是分开的两个函数】
@@ -263,6 +271,7 @@ export function TrainScreen() {
     exerciseId: string,
     durationSec: number,
     distanceM: number | undefined,
+    kcal: number | undefined,
   ) {
     const base: WorkoutSession = session ?? {
       id: newId(),
@@ -285,6 +294,9 @@ export function TrainScreen() {
       // 而不是写个 0 —— "跑了 0 米"和"没记距离"是两回事。
       // 统计页画"单次距离"那张图时要靠这个区分。
       distanceM,
+      // 从器械上抄来的热量。只存手填的，估算值不存 ——
+      // 估算值是算出来的，存下来以后改了公式或体重，老记录就不会跟着更新了。
+      kcal,
     }
 
     // 这个有氧动作今天记过没有？记过就不再重复塞进 exerciseIds，
@@ -491,6 +503,7 @@ export function TrainScreen() {
         <CardioForm
           allExercises={allExercises}
           initialExerciseId={cardioPresetId}
+          weightKg={weightKg}
           onSave={addCardio}
           onCancel={() => {
             setCardioOpen(false)

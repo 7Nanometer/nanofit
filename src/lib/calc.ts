@@ -216,6 +216,43 @@ export function formatPace(secPerKm: number): string {
   return `${min}'${String(sec).padStart(2, '0')}"`
 }
 
+// 把用户打的配速文字转成"每公里多少秒"。读不懂就返回 null。
+//
+// 【为什么要单独写一个，不用 NumberField】
+// 跑者脑子里的配速是"5 分 30 秒"，打出来就是 `5:30`。
+// 而 NumberField 的正则只放行数字和一个小数点，**冒号根本打不进去**。
+// 所以配速这一栏用的是普通输入框 + 这个解析函数。
+//
+// 【两种写法都收】
+//   '5:30' → 330 秒   （5 分 30 秒，跑者的习惯写法）
+//   '5.5'  → 330 秒   （同样意思的小数写法，用计算器的人会这么打）
+//   '5'    → 300 秒   （5 分整）
+//   '5:3'  → 303 秒   （秒那一位按字面理解，就是 3 秒，不是 30 秒）
+export function parsePaceText(text: string): number | null {
+  const t = text.trim()
+  // 只打了冒号或小数点、或者什么都没打，都算"还没填完"
+  if (t === '' || t === ':' || t === '.') return null
+
+  if (t.includes(':')) {
+    const [minPart, secPart] = t.split(':')
+    const min = minPart === '' ? 0 : Number(minPart)
+    const sec = secPart === undefined || secPart === '' ? 0 : Number(secPart)
+    if (Number.isNaN(min) || Number.isNaN(sec)) return null
+    const total = min * 60 + sec
+    return total > 0 ? total : null
+  }
+
+  const minutes = Number(t)
+  if (Number.isNaN(minutes) || minutes <= 0) return null
+  return Math.round(minutes * 60)
+}
+
+// 只放行配速输入框能接受的字符：数字、一个小数点、一个冒号。
+// 和 NumberField 那边是同一个思路，只是多让一个冒号过去。
+export function isPaceTextAllowed(text: string): boolean {
+  return /^\d*[:.]?\d*$/.test(text)
+}
+
 // 秒 → 人话。1800 → "30 分钟"，3900 → "1 小时 5 分"
 export function formatDuration(sec: number): string {
   const totalMin = Math.round(sec / 60)
