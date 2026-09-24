@@ -84,7 +84,6 @@ export type ExercisePoint = {
   label: string // 横轴上显示的短日期，如 '9/23'
   maxWeight: number // 这一天这个动作用过的最大重量
   volume: number // 这一天这个动作的总容量
-  best1RM: number // 这一天这个动作最好的估算 1RM
 }
 
 // 把"某个动作"在所有训练里的表现，按天汇总成一条时间线
@@ -107,17 +106,12 @@ export function exerciseSeries(
   for (const [date, sets] of byDate) {
     const maxWeight = Math.max(...sets.map((s) => s.weightKg))
     const volume = sets.reduce((sum, s) => sum + setVolume(s), 0)
-    const best1RM = Math.max(
-      ...sets.map((s) => estimate1RM(s.weightKg, s.reps)),
-    )
 
     points.push({
       date,
       label: shortLabel(date),
       maxWeight,
       volume,
-      // 保留一位小数，免得图上显示 101.33333333 这种
-      best1RM: Math.round(best1RM * 10) / 10,
     })
   }
 

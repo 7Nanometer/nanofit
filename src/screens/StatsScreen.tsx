@@ -19,12 +19,14 @@ import {
   readSettings,
 } from '../lib/storage'
 import {
+  ONE_RM_MIN_POINTS,
   bodySeries,
   cardioDistanceSeries,
   exerciseSeries,
   lastSessionDate,
   lastSessionVolume,
   niceAxis,
+  oneRmSeries,
   splitSessions,
   thisMonthKcal,
   thisWeekCardioSec,
@@ -35,6 +37,7 @@ import {
   weeklyKcal,
   weeklyVolumes,
 } from '../lib/stats'
+import type { OneRmPoint } from '../lib/stats'
 import { formatDateCN } from '../lib/date'
 import { formatDuration } from '../lib/calc'
 import { formatKcal, resolveWeightKg, roundKcal } from '../lib/kcal'
@@ -134,6 +137,10 @@ export function StatsScreen() {
 
   const weeks = weeklyVolumes(lifting, 8)
   const points = selectedId === '' ? [] : exerciseSeries(lifting, selectedId)
+  // 1RM 那条曲线用的是另一套算法（滚动 90 天 + 只算 12 次以内的组），
+  // 所以单独算一份。两个系列的数据点日期是一样的，但值不一样。
+  const oneRmPoints =
+    selectedId === '' ? [] : oneRmSeries(lifting, selectedId)
   const body = bodySeries(bodyMetrics)
 
   // 有氧那两块（只统计有氧记录，一条力量都不掺）
@@ -316,15 +323,49 @@ export function StatsScreen() {
                 color={C.chart2}
                 startFromZero
               />
-              <ProgressChart
-                points={points}
-                dataKey="best1RM"
-                title="估算 1RM"
-                subtitle={`${selectedName} · 由当天最好的一组反推的一次极限重量（kg）`}
-                unit="kg"
-                columnLabel="估算 1RM"
-                color={C.chart3}
-              />
+              {/* ---------- 估算 1RM ----------
+                  这一块和上面两张口径不一样，所以单独写。上面两张画的是
+                  "每次训练做了什么"，这条画的是"最近大概能举多少" ——
+                  算法在 oneRmSeries 里，多一条 PR 线和上面那个大数字。 */}
+              {oneRmPoints.length > 0 && (
+                <div className="mb-3 flex gap-2">
+                  <StatTile
+                    label="当前估算 1RM"
+                    value={`${oneRmPoints[oneRmPoints.length - 1].oneRm} kg`}
+                    hint={`${selectedName} · 截至 ${formatDateCN(
+                      oneRmPoints[oneRmPoints.length - 1].date,
+                    )}`}
+                  />
+                </div>
+              )}
+
+              {oneRmPoints.length >= ONE_RM_MIN_POINTS ? (
+                <>
+                  <OneRmChart points={oneRmPoints} name={selectedName} />
+                  {/* 这段说明不是客套话。不知道口径的人会把它当成
+                      "我当天最好的成绩"，然后觉得数字偏低。 */}
+                  <p className="mt-1 rounded-xl border border-line bg-surface p-3 text-xs text-muted">
+                    曲线画的是"截至那天，往前 90 天里最好的水平"，
+                    不是当天最好那一组 —— 所以它反映的是能力的变化，
+                    不会因为今天练法不同就上下跳。
+                    <br />
+                    虚线是历史最高，只升不降，用来看哪天突破了。
+                    <br />
+                    只统计 12 次以内的组：次数越多，Epley 公式越会高估
+                    （70kg 做 20 次会推出 116kg，但那个人举不起 116kg 一次）。
+                  </p>
+                </>
+              ) : (
+                <p className="rounded-xl border border-line bg-surface p-3 text-center text-sm text-muted">
+                  再练几次就能看到趋势
+                  {oneRmPoints.length === 0 && (
+                    <>
+                      <br />
+                      这个动作还缺"12 次以内、带重量"的记录，有记录了才估得出来
+                    </>
+                  )}
+                </p>
+              )}
             </>
           )}
         </>
@@ -609,6 +650,105 @@ function ProgressChart<T extends { label: string }>({
             type="monotone"
             dataKey={dataKey}
             stroke={color}
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  )
+}
+
+// ============================================================
+// 估算 1RM 的能力曲线（两条线）
+// ============================================================
+//
+// 【为什么不复用上面的 ProgressChart】
+// 它只画一条线，而这张要画两条（主曲线 + PR 阶梯线），而且 PR 线要用
+// 虚线和不同的线型。硬塞进 ProgressChart 会让那个组件到处是 if。
+//
+// 【主曲线画的是什么】
+// 不是"当天最好那一组"，而是"截至那天，往前 90 天里最好的水平"。
+// 这样曲线反映的是能力的变化，不会因为今天冲大重量、明天练轻重量
+// 就上下跳。口径的来龙去脉写在 lib/stats.ts 的 oneRmSeries 里。
+
+function OneRmChart({
+  points,
+  name,
+}: {
+  points: OneRmPoint[]
+  name: string
+}) {
+  const [C] = useState(chartColors)
+
+  // ★ 纵轴要**同时**装得下主曲线和 PR 线。
+  //   只按主曲线算刻度的话，PR 线会比它高（历史最高永远 ≥ 最近水平），
+  //   那截线会顶到图外面被切掉 —— 而且是静悄悄地切掉，不报错。
+  const axis = niceAxis(
+    points.flatMap((p) => [p.oneRm, p.pr]),
+    false,
+  )
+
+  return (
+    <ChartCard
+      title="估算 1RM"
+      subtitle={`${name} · 截至当天，前 90 天里的最好水平（kg）`}
+      rows={points.map((p) => ({
+        日期: p.label,
+        水平: `${p.oneRm.toLocaleString()} kg`,
+        历史最高: `${p.pr.toLocaleString()} kg`,
+      }))}
+      columns={[
+        { key: '日期', label: '日期' },
+        { key: '水平', label: '截至这天的水平，kg' },
+        { key: '历史最高', label: '截至这天的历史最高，kg' },
+      ]}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={points}
+          margin={{ top: 8, right: 10, bottom: 0, left: 0 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+          <XAxis
+            dataKey="label"
+            stroke={C.muted}
+            fontSize={11}
+            tickLine={false}
+            minTickGap={24}
+          />
+          <YAxis
+            stroke={C.muted}
+            fontSize={11}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={formatAxis}
+            domain={axis.domain}
+            ticks={axis.ticks}
+            width={52}
+          />
+          <Tooltip
+            {...tooltipStyle(C)}
+            formatter={(value) => `${Number(value).toLocaleString()} kg`}
+          />
+          {/* PR 线画在前面（下面的图层）。它是背景参考，
+              不该抢主曲线的视线，所以用浅色虚线、不画点。
+              stepAfter = 阶梯：值不变就一直平着，涨了才跳一级 ——
+              正好对应"只升不降"。 */}
+          <Line
+            type="stepAfter"
+            dataKey="pr"
+            name="历史最高"
+            stroke={C.muted}
+            strokeWidth={1.5}
+            strokeDasharray="4 4"
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="oneRm"
+            name="最近水平"
+            stroke={C.chart3}
             strokeWidth={2}
             dot={{ r: 3 }}
           />
