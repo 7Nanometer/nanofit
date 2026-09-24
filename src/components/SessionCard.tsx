@@ -2,6 +2,7 @@ import type { Exercise, SetEntry, WorkoutSession } from '../types'
 import { cardioIdSet, exerciseName } from '../data/exercises'
 import { formatDateCN } from '../lib/date'
 import { describeCardio, formatDuration, sessionVolume } from '../lib/calc'
+import { formatKcal, sessionKcal } from '../lib/kcal'
 
 // ============================================================
 // 历史记录里的一条
@@ -19,6 +20,8 @@ import { describeCardio, formatDuration, sessionVolume } from '../lib/calc'
 type Props = {
   session: WorkoutSession
   allExercises: Exercise[] // 用来把动作 id 翻成中文名
+  // 算热量估算用的体重。没有就传 undefined —— 那就不显示热量。
+  weightKg?: number
   expanded: boolean
   onToggle: () => void
   onDelete: () => void
@@ -27,6 +30,7 @@ type Props = {
 export function SessionCard({
   session,
   allExercises,
+  weightKg,
   expanded,
   onToggle,
   onDelete,
@@ -63,6 +67,14 @@ export function SessionCard({
   }
   if (cardioSeconds > 0) {
     summaryParts.push(`有氧 ${formatDuration(cardioSeconds)}`)
+  }
+
+  // 消耗热量（估算）。算不出来时这一项**整个不出现** ——
+  // 和上面那些项目一个规矩：没有的数据不占位置，更不写"—"占位。
+  // 老记录尤其会走这条路：那时候还没开始记训练时长。
+  const kcal = sessionKcal(session, weightKg, cardioIds)
+  if (kcal !== null) {
+    summaryParts.push(formatKcal(kcal))
   }
 
   return (

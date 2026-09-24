@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import type { Exercise, WorkoutSession } from '../types'
 import { mergeExercises } from '../data/exercises'
-import { readCustomExercises, readSessions, writeSessions } from '../lib/storage'
+import {
+  readBodyMetrics,
+  readCustomExercises,
+  readSessions,
+  readSettings,
+  writeSessions,
+} from '../lib/storage'
+import { resolveWeightKg } from '../lib/kcal'
 import { SessionCard } from '../components/SessionCard'
 
 // ============================================================
@@ -20,6 +27,12 @@ export function HistoryScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filterExerciseId, setFilterExerciseId] = useState('')
   const [storageError, setStorageError] = useState(false)
+
+  // 每条记录上的"约 XXX 千卡"要体重才算得出来。
+  // 优先「身体数据」里最近一次，没记过才用设置里的默认体重。
+  const [weightKg] = useState(() =>
+    resolveWeightKg(readBodyMetrics(), readSettings()),
+  )
 
   const allExercises = mergeExercises(customExercises)
 
@@ -94,6 +107,7 @@ export function HistoryScreen() {
           key={session.id}
           session={session}
           allExercises={allExercises}
+          weightKg={weightKg}
           expanded={expandedId === session.id}
           onToggle={() =>
             setExpandedId(expandedId === session.id ? null : session.id)

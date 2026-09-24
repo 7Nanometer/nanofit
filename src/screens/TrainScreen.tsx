@@ -5,6 +5,7 @@ import type {
   PlannedItem,
   SetEntry,
   Settings,
+  StrengthMetLevel,
   Template,
   WorkoutSession,
 } from '../types'
@@ -19,7 +20,12 @@ import {
   textToNumber,
 } from '../lib/calc'
 import { unlockAudio } from '../lib/beep'
-import { resolveWeightKg, sessionSeconds } from '../lib/kcal'
+import {
+  DEFAULT_MET_LEVEL,
+  recommendMetLevel,
+  resolveWeightKg,
+  sessionSeconds,
+} from '../lib/kcal'
 import {
   clearActiveWorkout,
   readActiveWorkout,
@@ -30,8 +36,10 @@ import {
   readTemplates,
   writeActiveWorkout,
   writeSessions,
+  writeSettings,
 } from '../lib/storage'
 import { CardioForm } from '../components/CardioForm'
+import { MetPicker } from '../components/MetPicker'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { RestTimer } from '../components/RestTimer'
 import { SetRow } from '../components/SetRow'
@@ -75,6 +83,11 @@ export function TrainScreen() {
   const [cardioPresetId, setCardioPresetId] = useState<string | undefined>(
     undefined,
   )
+
+  // 结束训练时的"这次练得有多累"面板开着没有。
+  // 它顺便代替了原来的"确定要结束吗"弹窗 —— 反正都要确认一次，
+  // 多问这一句不多一次操作。
+  const [metPickerOpen, setMetPickerOpen] = useState(false)
   // 休息倒计时"结束的时间点"。null 表示当前没在休息。
   // 注意存的是"结束时刻"而不是"还剩几秒"，原因见 RestTimer.tsx 的注释。
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
@@ -145,6 +158,31 @@ export function TrainScreen() {
     summaryParts.push(`有氧 ${formatDuration(cardioSeconds)}`)
   }
   const hasEntries = entries.length > 0
+
+  // 结束训练那个弹窗里的一句话。
+  // 和顶部那行小结不一样 —— 顶部是练的过程中看的（带总容量），
+  // 这句是结束时确认用的，只说"练了多少"，不掺别的。
+  const finishParts: string[] = []
+  if (strengthEntries.length > 0) {
+    finishParts.push(`${strengthEntries.length} 组力量`)
+  }
+  if (cardioSeconds > 0) {
+    finishParts.push(`有氧 ${formatDuration(cardioSeconds)}`)
+  }
+  const finishSummary = `共 ${finishParts.join(' + ')}`
+
+  // 点"结束训练"那一刻算出来的推荐档位。
+  //
+  // 【为什么存在 state 里，而不是每次渲染现算】
+  // 两个原因：
+  //   1. 算推荐要用"这场训练一共多久"，而那个时长只有到"点结束"这一刻
+  //      才定得下来。在渲染过程里读当前时间会破坏 React 的"纯"规矩
+  //      （检查工具 oxlint 会警告，这个项目里别处也是这么绕开的）。
+  //   2. ★ 推荐用的时长必须和落盘用的时长是同一个，否则会出现
+  //      "建议按 26 分钟算、热量按 31 分钟算"这种自相矛盾 ——
+  //      在 30 分钟这个分界线上，差 5 分钟就会推荐错一档。
+  const [recommendedLevel, setRecommendedLevel] =
+    useState<StrengthMetLevel>(DEFAULT_MET_LEVEL)
 
   // 先存进储物柜，再更新界面。所有改动数据的操作都走这一个出口。
   function persist(next: WorkoutSession) {
@@ -336,30 +374,58 @@ export function TrainScreen() {
       return
     }
 
-    // 记了东西：先问一句，免得手滑点掉。
-    // 问的话里把力量和有氧分开说 —— 只练了有氧时说"共 1 组"没人看得懂。
-    const what: string[] = []
-    if (strengthEntries.length > 0) what.push(`${strengthEntries.length} 组力量`)
-    if (cardioSeconds > 0) what.push(`有氧 ${formatDuration(cardioSeconds)}`)
+    // 练了力量 → 弹强度选择面板。它顺便代替了原来的"确定要结束吗"。
+    // 为什么要问：同样练 1 小时，轻重量和大重量的热量能差一倍
+    // （MET 3.0 对 6.0），而系统只能从数据里猜，看不见"你今天状态不好"。
+    if (strengthEntries.length > 0) {
+      // ★ 用 completedSession() 补好时长再推荐 —— 这样推荐和落盘
+      //   用的是同一个时长，不会在 30 分钟这种分界线上打架
+      setRecommendedLevel(recommendMetLevel(completedSession(session), cardioIds))
+      setMetPickerOpen(true)
+      return
+    }
+
+    // 纯有氧 → 用不上力量档位，沿用原来那个确认框
     const confirmed = window.confirm(
-      `结束今天的训练吗？\n\n共 ${what.join(' + ')}，会存进历史记录。`,
+      `结束今天的训练吗？\n\n${finishSummary}，会存进历史记录。`,
     )
     if (!confirmed) return
+    saveWorkout(undefined)
+  }
 
-    // ---------- 补上这次练了多久 ----------
-    //
-    // 【为什么现在才补】
-    // 时长只有到"结束"这一刻才知道。存在 active-workout 里的那份每次点 ✓
-    // 都会被覆盖重写，所以不能提前写；这里算一次、只写进 sessions。
-    //
-    // 【为什么是"整场时长"而不是"做组时长"】
-    // 热量用的 MET 档位是按整场训练的平均强度定的。只算做组时间的话，
-    // 同样的组数时长会短一大截，热量会严重高估。所以必须含组间休息。
-    const finished: WorkoutSession = {
-      ...session,
+  // ---------- 把"正在进行的那份"补成"可以存的那份" ----------
+  //
+  // 【为什么现在才能补时长】
+  // 时长只有到"结束"这一刻才知道。存在 active-workout 里的那份每次点 ✓
+  // 都会被覆盖重写，所以不能提前写；这里算一次、只写进 sessions。
+  //
+  // 【为什么是"整场时长"而不是"做组时长"】
+  // 热量用的 MET 档位是按整场训练的平均强度定的。只算做组时间的话，
+  // 同样的组数时长会短一大截，热量会严重高估。所以必须含组间休息。
+  //
+  // ★ 推荐档位和落盘都走这一个函数，保证两处用的是同一个时长口径。
+  function completedSession(s: WorkoutSession): WorkoutSession {
+    return {
+      ...s,
       // 传"现在"进去，拿到的是从开始到此刻的整场时长（含组间休息）。
       // 算不出来时保留原值（多半本来是 undefined，界面会显示"—"，不会崩）。
-      durationSec: sessionSeconds(session, new Date().toISOString()) ?? session.durationSec,
+      durationSec:
+        sessionSeconds(s, new Date().toISOString()) ?? s.durationSec,
+    }
+  }
+
+  // ---------- 真正落盘 ----------
+  //
+  // metLevel 为 undefined 表示"这次没有力量训练"，没有档位可记。
+  function saveWorkout(metLevel: StrengthMetLevel | undefined) {
+    if (!session) return
+
+    const finished: WorkoutSession = {
+      ...completedSession(session),
+      // 用展开语法按条件加字段，而不是写 metLevel: metLevel ——
+      // 后者会在纯有氧时写出一个 metLevel: undefined 的键，
+      // 虽然读出来一样，但存进 json 会多一行没意义的空字段
+      ...(metLevel !== undefined ? { metLevel } : {}),
     }
 
     // 【这里的顺序非常关键，是防丢数据最重要的一处】
@@ -375,8 +441,16 @@ export function TrainScreen() {
       return
     }
 
+    // 记住这次选的档，下次打开默认就用它。
+    // 用 readSettings() 现读，而不是用上面那个 settings state ——
+    // 那个是挂载时读一次的，可能已经过时了。
+    if (metLevel !== undefined) {
+      writeSettings({ ...readSettings(), lastMetLevel: metLevel })
+    }
+
     clearActiveWorkout()
     setSession(null)
+    setMetPickerOpen(false)
   }
 
   return (
@@ -509,6 +583,18 @@ export function TrainScreen() {
             setCardioOpen(false)
             setCardioPresetId(undefined)
           }}
+        />
+      )}
+
+      {metPickerOpen && session !== null && (
+        <MetPicker
+          recommended={recommendedLevel}
+          // 第一次用（没选过）就用推荐值；之后默认用上次选的。
+          // 两句话都要满足，所以界面上还会标出"建议"哪一档。
+          defaultLevel={settings.lastMetLevel ?? recommendedLevel}
+          summary={finishSummary}
+          onConfirm={saveWorkout}
+          onCancel={() => setMetPickerOpen(false)}
         />
       )}
     </div>

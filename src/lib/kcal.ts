@@ -222,8 +222,15 @@ export function estimateKcal(
 //
 // 一律抹到最近的 10。因为它本来就是个 ±10~20% 的估算，
 // 写成"523 千卡"那种精确感是在骗人。
+//
+// 【不足 10 千卡的情况】
+// 只记了一两组就结束训练的话，算出来可能不到 10 千卡。
+// 抹到 10 的倍数会得到"约 0 千卡"—— 看着像坏了，也像在说"你没消耗"。
+// 所以这种时候直说"不足 10 千卡"，比编一个 0 或 10 都诚实。
 export function formatKcal(kcal: number): string {
-  return `约 ${Math.round(kcal / 10) * 10} 千卡`
+  const rounded = Math.round(kcal / 10) * 10
+  if (rounded === 0) return '不足 10 千卡'
+  return `约 ${rounded} 千卡`
 }
 
 // ---------- 体重从哪来 ----------
