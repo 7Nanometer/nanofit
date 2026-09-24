@@ -559,6 +559,22 @@ export function StatsScreen() {
   )
 }
 
+// ---------- 横轴日期标签的密度 ----------
+//
+// 【这两个数是实测出来的，不是拍脑袋】
+// 在 375px 的手机宽度下，图表的实际画布只有 317px 宽，
+// 而一个 '9/23' 这样的日期标签大约 18px。
+//
+// 只留 24px 间距的话，标签之间只剩 6px 的空隙 —— 数据点一多看着就发闷。
+// 放宽到 40px，标签之间留出 20 多像素，一眼能看清又不浪费地方。
+//
+// 【为什么还要 interval】
+// minTickGap 是 recharts 自己算"挤不下就少显示几个"的阈值；
+// interval="preserveStartEnd" 是明确告诉它"头一个和最后一个日期一定要显示"。
+// 最后那个日期是"最近一次"，看不到会很难受 —— 别让它被自动省掉。
+const X_TICK_MIN_GAP = 40
+const X_TICK_INTERVAL = 'preserveStartEnd' as const
+
 // ============================================================
 // 一张"跟着时间进步"的折线图
 // ============================================================
@@ -627,7 +643,8 @@ function ProgressChart<T extends { label: string }>({
             stroke={C.muted}
             fontSize={11}
             tickLine={false}
-            minTickGap={24}
+            minTickGap={X_TICK_MIN_GAP}
+            interval={X_TICK_INTERVAL}
           />
           <YAxis
             stroke={C.muted}
@@ -715,7 +732,8 @@ function OneRmChart({
             stroke={C.muted}
             fontSize={11}
             tickLine={false}
-            minTickGap={24}
+            minTickGap={X_TICK_MIN_GAP}
+            interval={X_TICK_INTERVAL}
           />
           <YAxis
             stroke={C.muted}
