@@ -36,7 +36,7 @@
 
 Exercise { id, name, muscleGroup, equipment, isCustom, kind?, note? }
 SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt, durationSec?, distanceM?, kcal? }
-WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec?, startedAt?, metLevel? }
+WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec?, startedAt?, metLevel?, restEndsAt? }
 Template { id, name, items: { exerciseId, targetSets, targetReps }[] }
 BodyMetric { date, weightKg, heightCm?, bodyFat?, bodyFatSource? }
 Settings { restSec, rpeEnabled, sex?, birthYear?, theme?, defaultWeightKg?, lastMetLevel? }
@@ -197,6 +197,11 @@ Capacitor 套壳。**网页版和安卓端共用同一份 src/ 代码**，靠 `C
 
 ### 这些坑别再踩（都是踩过的）
 
+- ★ **切 tab 会卸载整个页面**（App.tsx 是 `{tab === 'train' && <TrainScreen />}`），
+  页面内存里的 state 全没。所以"跨 tab 要留着的东西"必须存进 localStorage。
+  休息倒计时就是这么修的（WorkoutSession.restEndsAt）。
+  ★ 同一个坑还在等着：**训练页的任何临时状态**（选中的动作、展开的卡片…）
+  都不会跨 tab 保留 —— 加新功能时先想一句"切走再回来，这个该不该还在"
 - App.tsx 里返回键的监听**必须只挂一次**，当前 tab 用 ref 读。
   改成依赖 [tab] 会让 App 的处理器爬到设置页上面，子页面按返回会跳过设置列表
 - 原生壳里**不要**注册 Service Worker（否则"重装了 App 界面还是老的"），

@@ -62,9 +62,11 @@ import { TemplatePicker } from '../components/TemplatePicker'
 // ============================================================
 
 export function TrainScreen() {
-  const [session, setSession] = useState<WorkoutSession | null>(
-    readActiveWorkout,
-  )
+  // 显示这一页时只读一次储物柜。
+  // 【为什么先接在变量里】下面有两个 state 都要用这份数据（当前的训练、
+  // 以及正在进行的休息倒计时），在外面接住就不用读两遍。
+  const [initialSession] = useState<WorkoutSession | null>(readActiveWorkout)
+  const [session, setSession] = useState<WorkoutSession | null>(initialSession)
   const [customExercises] = useState<Exercise[]>(readCustomExercises)
   const [settings] = useState<Settings>(readSettings)
   const [customTemplates] = useState<Template[]>(readTemplates)
@@ -90,7 +92,21 @@ export function TrainScreen() {
   const [metPickerOpen, setMetPickerOpen] = useState(false)
   // 休息倒计时"结束的时间点"。null 表示当前没在休息。
   // 注意存的是"结束时刻"而不是"还剩几秒"，原因见 RestTimer.tsx 的注释。
-  const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
+  //
+  // 【切走再切回来，倒计时为什么还在】
+  // 底部四个 tab 是靠一个变量切换的，切走的时候训练页整个被卸载，
+  // 页面内存里的东西全没了 —— 以前倒计时就是这么凭空消失的。
+  // 现在它跟着"正在进行的训练"一起存了档（WorkoutSession.restEndsAt），
+  // 所以回到这一页时能从存档里接着走。
+  //
+  // 【只恢复"还没结束"的】
+  // 已经过期的直接丢掉。不然你切走两三分钟再回来，会看到一个
+  // "休息结束 点一下继续"横在那儿，而且还会补响一声 ——
+  // 那声提醒来得莫名其妙（你早就休息完了）。
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(() => {
+    const saved = initialSession?.restEndsAt
+    return saved !== undefined && saved > Date.now() ? saved : null
+  })
 
   // 今天。
   // 用 useState 的惰性初始化，让它"显示这一页时只算一次"。
@@ -278,19 +294,29 @@ export function TrainScreen() {
       rpe: rpe ?? undefined,
       completedAt: new Date().toISOString(),
     }
-    persist({ ...session, entries: [...session.entries, entry] })
-
-    // 记完一组，自动开始休息倒计时。
+    // 记完一组，自动开始休息倒计时。先把"结束的那一刻"算出来 ——
+    // 存档和界面都要用它，算两次可能出现几毫秒的差。
     //
-    // 解锁音响也放在这里，因为此刻正处在"用户手指点击"的那一瞬间 ——
-    // 这是浏览器唯一允许我们把音响打开的时机。
-    // 错过这一下，90 秒后想自动响铃就会被浏览器拒绝。
-    unlockAudio()
     // 下一行的 Date.now() 是安全的：这行代码只有在你点 ✓ 的那一刻才执行，
     // 属于"事件处理"，不是渲染过程。
     // 检查工具 oxlint 分不清这两者，会误报一条 react(purity) 警告，所以这里显式忽略它。
     // oxlint-disable-next-line react/purity
-    setRestEndsAt(Date.now() + settings.restSec * 1000)
+    const restEndsAtNext = Date.now() + settings.restSec * 1000
+
+    // ★ 倒计时和这一组一起写进**同一份存档**，一次写盘搞定两件事。
+    //   以前是先写训练、再单独 setRestEndsAt（只改内存不落盘），
+    //   结果切个 tab 训练页一卸载，倒计时就没了。
+    persist({
+      ...session,
+      entries: [...session.entries, entry],
+      restEndsAt: restEndsAtNext,
+    })
+
+    // 解锁音响。放在这里是因为此刻正处在"用户手指点击"的那一瞬间 ——
+    // 这是浏览器唯一允许我们把音响打开的时机。
+    // 错过这一下，90 秒后想自动响铃就会被浏览器拒绝。
+    unlockAudio()
+    setRestEndsAt(restEndsAtNext)
   }
 
   // 算热量估算用的体重。优先「身体数据」里最近一次，没记过才用设置里那个默认值。
@@ -352,6 +378,19 @@ export function TrainScreen() {
 
     setCardioOpen(false)
     setCardioPresetId(undefined)
+  }
+
+  // ---------- 关掉休息倒计时 ----------
+  //
+  // 两种情况会走到这里：点"跳过"提前结束，或者休息结束后点"点一下继续"。
+  //
+  // ★ 两边都要清：内存里的（界面立刻变）和存档里的（切个 tab 再回来
+  //   不会又冒出来）。只清内存的话，倒计时会在切回来时"复活"。
+  function clearRest() {
+    setRestEndsAt(null)
+    if (session !== null) {
+      persist({ ...session, restEndsAt: undefined })
+    }
   }
 
   // ---------- 删掉记错的一组 ----------
@@ -444,6 +483,11 @@ export function TrainScreen() {
       // 后者会在纯有氧时写出一个 metLevel: undefined 的键，
       // 虽然读出来一样，但存进 json 会多一行没意义的空字段
       ...(metLevel !== undefined ? { metLevel } : {}),
+      // 顺手把休息倒计时抹掉：训练都结束了，历史记录里留着
+      // "休息到几点结束"没有任何意义。
+      // 写成 undefined 而不是 delete —— JSON.stringify 会把值是 undefined
+      // 的键自动扔掉，所以存档里不会真的多出这一行。
+      restEndsAt: undefined,
     }
 
     // 【这里的顺序非常关键，是防丢数据最重要的一处】
@@ -502,7 +546,7 @@ export function TrainScreen() {
 
       {/* ---------- 休息倒计时 ---------- */}
       {restEndsAt !== null && (
-        <RestTimer endsAt={restEndsAt} onClose={() => setRestEndsAt(null)} />
+        <RestTimer endsAt={restEndsAt} onClose={clearRest} />
       )}
 
       {/* ---------- 每个动作一张卡片 ---------- */}
