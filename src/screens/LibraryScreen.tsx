@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { MUSCLE_GROUPS, MUSCLE_LABELS } from '../types'
 import type { Exercise, MuscleGroup } from '../types'
-import { mergeExercises } from '../data/exercises'
+import { PRESET_EXERCISES, mergeExercises } from '../data/exercises'
 import { readCustomExercises, writeCustomExercises } from '../lib/storage'
 import { ExerciseForm } from '../components/ExerciseForm'
 
@@ -107,7 +107,10 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
       {/* ---------- 数量提示 ---------- */}
       <p className="mb-2 text-sm text-muted">
         共 {list.length} 个动作
-        {filter === 'all' && kw === '' && `（预置 40 个 + 自建 ${custom.length} 个）`}
+        {/* 预置的数量从数据里数出来，不写死 —— 不然每加一批动作都得回来改这里 */}
+        {filter === 'all' &&
+          kw === '' &&
+          `（预置 ${PRESET_EXERCISES.length} 个 + 自建 ${custom.length} 个）`}
       </p>
 
       {/* ---------- 动作列表 ---------- */}

@@ -36,7 +36,10 @@ import type { Exercise, ExerciseKind } from '../types'
 export const OUTDOOR_RUN_ID = 'cardio-outdoor-run'
 
 export const PRESET_EXERCISES: Exercise[] = [
-  // ---------------- 胸（7 个）----------------
+  // ---------------- 胸（20 个）----------------
+  //
+  // 前 7 个是 2026-09-23 最初那批，id 从那天起就写进了你的历史记录，不许改。
+  // 后 13 个是 2026-09-24 扩充的，全部用新 id。
   { id: 'bb-bench-press', name: '杠铃卧推', muscleGroup: 'chest', equipment: '杠铃', isCustom: false, note: '肩胛骨往后往下夹紧，杠铃落到乳头连线，大臂和身体约 75 度' },
   { id: 'db-bench-press', name: '哑铃卧推', muscleGroup: 'chest', equipment: '哑铃', isCustom: false, note: '下放到胸部两侧，推起时别把肘完全锁死' },
   { id: 'db-incline-press', name: '上斜哑铃卧推', muscleGroup: 'chest', equipment: '哑铃', isCustom: false, note: '靠背调到 30-45 度，主要练上胸' },
@@ -45,7 +48,27 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'mach-pec-deck', name: '蝴蝶机夹胸', muscleGroup: 'chest', equipment: '固定器械', isCustom: false, note: '肘保持微屈不变，用大臂往中间夹' },
   { id: 'cable-fly', name: '绳索夹胸', muscleGroup: 'chest', equipment: '绳索', isCustom: false, note: '站弓步，双手在胸前交叉，夹到最紧停 1 秒' },
 
-  // ---------------- 背（7 个）----------------
+  // ---- 2026-09-24 扩充（13 个）----
+  { id: 'bb-incline-bench-press', name: '上斜杠铃卧推', muscleGroup: 'chest', equipment: '杠铃', isCustom: false, note: '靠背调到 30-45 度，杠铃落到锁骨下方。角度越大越偏肩，别超过 45 度' },
+  { id: 'bb-decline-bench-press', name: '下斜杠铃卧推', muscleGroup: 'chest', equipment: '杠铃', isCustom: false, note: '主要练下胸。下斜 20-30 度就够，起身时找人扶一下更稳' },
+  { id: 'db-decline-press', name: '下斜哑铃卧推', muscleGroup: 'chest', equipment: '哑铃', isCustom: false, note: '下斜躺着推哑铃，活动范围比杠铃大，注意别让哑铃撞到胸口' },
+  { id: 'db-fly', name: '哑铃平板飞鸟', muscleGroup: 'chest', equipment: '哑铃', isCustom: false, note: '肘保持微屈不变，像抱一棵大树那样往中间合。小重量，肩膀有伤慎做' },
+  { id: 'db-incline-fly', name: '上斜哑铃飞鸟', muscleGroup: 'chest', equipment: '哑铃', isCustom: false, note: '上斜 30 度左右，主要练上胸。全程控制住，别靠甩' },
+  { id: 'db-pullover', name: '哑铃仰卧屈臂上拉', muscleGroup: 'chest', equipment: '哑铃', isCustom: false, note: '躺平，双手托一个哑铃从头后绕到胸口上方。胸和背阔都练，肩活动度差就先用小重量' },
+  { id: 'smith-bench-press', name: '史密斯卧推', muscleGroup: 'chest', equipment: '史密斯', isCustom: false, note: '轨道是固定的，不用管平衡，适合一个人练到力竭' },
+  { id: 'smith-incline-press', name: '史密斯上斜卧推', muscleGroup: 'chest', equipment: '史密斯', isCustom: false, note: '凳子调到 30 度左右推进史密斯机。角度固定，比自由重量好上手' },
+  { id: 'mach-incline-chest-press', name: '上斜器械推胸', muscleGroup: 'chest', equipment: '固定器械', isCustom: false, note: '手柄位置比平推机低，推的方向朝斜上方' },
+  { id: 'cable-high-fly', name: '高位绳索夹胸', muscleGroup: 'chest', equipment: '绳索', isCustom: false, note: '滑轮调到最高，两只手从上往下往中间夹。偏下胸' },
+  { id: 'cable-low-fly', name: '低位绳索夹胸', muscleGroup: 'chest', equipment: '绳索', isCustom: false, note: '滑轮调到最低，两只手从下往上往中间夹，收到胸口高度。偏上胸' },
+  { id: 'bw-pushup', name: '俯卧撑', muscleGroup: 'chest', equipment: '自重', isCustom: false, note: '手比肩略宽，身体从头到脚一条直线，胸口贴近地面。重量填 0' },
+  { id: 'bw-decline-pushup', name: '下斜俯卧撑', muscleGroup: 'chest', equipment: '自重', isCustom: false, note: '脚搭在凳子或台阶上，抬高一点偏上胸也更难。重量填 0' },
+
+  // ---------------- 背（22 个）----------------
+  //
+  // 前 7 个是 2026-09-23 最初那批。其中"硬拉"在 2026-09-24 被移到"全身"
+  // 那一类去了（它本来就是全身发力，放"背"里不准确）—— 但 **id 一个字母没改**，
+  // 所以你以前练过的硬拉记录还认得出它。
+  // 后 16 个是 2026-09-24 扩充的。
   { id: 'bw-pullup', name: '引体向上', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '正握略宽于肩。别想"用手拉"，想"用肘往下压"。重量填 0' },
   { id: 'cable-lat-pulldown', name: '高位下拉', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '胸口主动迎向横杆，不要靠上半身往后倒来借力' },
   { id: 'bb-row', name: '杠铃划船', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '髋往后折、背全程挺直，杠铃拉向肚脐' },
@@ -53,6 +76,24 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'cable-seated-row', name: '坐姿绳索划船', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '先夹肩胛再拉手，上半身别跟着后仰' },
   { id: 'cable-straight-arm-pulldown', name: '直臂下压', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '手臂基本伸直往下压到大腿侧面，专门练背阔肌' },
   { id: 'bb-deadlift', name: '硬拉', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '背全程挺直，杠铃贴着腿起，臀和腿同时发力' },
+
+  // ---- 2026-09-24 扩充（16 个）----
+  { id: 'bb-reverse-grip-row', name: '反握杠铃划船', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '手心朝前握（反握），肘更贴身体，下背压力小，偏背阔下部' },
+  { id: 'bb-t-bar-row', name: 'T杠划船', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '杠铃一头固定住，用 V 型把手拉。比杠铃划船好稳，适合上大重量' },
+  { id: 'bb-pendlay-row', name: '潘德利划船', muscleGroup: 'back', equipment: '杠铃', isCustom: false, note: '每一组都从地面重新起，爆发拉到腹部再放回地上。偏力量举，重量别贪' },
+  { id: 'db-bent-over-row', name: '俯身哑铃划船', muscleGroup: 'back', equipment: '哑铃', isCustom: false, note: '双手各一个哑铃，俯身到接近水平，同时往腰两侧拉' },
+  { id: 'db-chest-supported-row', name: '靠凳哑铃划船', muscleGroup: 'back', equipment: '哑铃', isCustom: false, note: '胸口贴住上斜凳，两只手往下拉。腰不吃力，更能练到背本身' },
+  { id: 'mach-assisted-pullup', name: '辅助引体向上', muscleGroup: 'back', equipment: '固定器械', isCustom: false, note: '跪在配重垫上，配重越大越省力。还做不了引体时用它过渡' },
+  { id: 'mach-seated-row', name: '器械坐姿划船', muscleGroup: 'back', equipment: '固定器械', isCustom: false, note: '胸口顶住靠垫往身后拉，比绳索划船更容易找到背的发力' },
+  { id: 'mach-high-row', name: '器械高位划船', muscleGroup: 'back', equipment: '固定器械', isCustom: false, note: '手柄从上往下往身后拉，偏上背和斜方肌中段' },
+  { id: 'mach-one-arm-row', name: '器械单臂划船', muscleGroup: 'back', equipment: '固定器械', isCustom: false, note: '一只手拉，能看出两边力量差多少。只记一侧的重量' },
+  { id: 'cable-close-grip-pulldown', name: '窄距下拉', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '换 V 型把手，握得窄，肘贴着身体往下压，偏背阔下部' },
+  { id: 'cable-reverse-grip-pulldown', name: '反握高位下拉', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '手心朝自己握住横杆下拉，肘会更贴身体，偏背阔下部' },
+  { id: 'cable-one-arm-pulldown', name: '单臂绳索下拉', muscleGroup: 'back', equipment: '绳索', isCustom: false, note: '一只手拉单柄，身体可以稍微侧一点，活动范围更大。只记一侧的重量' },
+  { id: 'bw-chinup', name: '反握引体向上', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '手心朝自己握（反握），比正握省力，肱二头参与更多。重量填 0' },
+  { id: 'bw-neutral-grip-pullup', name: '对握引体向上', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '手心相对握平行把手，对肩膀最友好的一种引体。重量填 0' },
+  { id: 'bw-wide-grip-pullup', name: '宽距引体向上', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '握得比肩宽，偏背阔外侧，也是三种引体里最难的。重量填 0' },
+  { id: 'bw-inverted-row', name: '反向划船', muscleGroup: 'back', equipment: '自重', isCustom: false, note: '杠铃架在腰高处，身体在杆下仰躺，把胸口拉向杆。越接近水平越难。重量填 0' },
 
   // ---------------- 腿（9 个，这一类多给两个）----------------
   { id: 'bb-squat', name: '杠铃深蹲', muscleGroup: 'legs', equipment: '杠铃', isCustom: false, note: '下蹲到大腿和地面平行，膝盖方向跟着脚尖走' },

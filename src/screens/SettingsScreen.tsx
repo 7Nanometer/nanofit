@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { Settings, Theme } from '../types'
+import { PRESET_EXERCISES } from '../data/exercises'
 import { registerBackHandler } from '../lib/backbutton'
 import { downloadBackup, importBackup } from '../lib/json'
 import { readSettings, writeSettings } from '../lib/storage'
@@ -154,7 +155,9 @@ export function SettingsScreen() {
 
         <SettingRow
           label="动作库"
-          hint="40 个预置动作 + 自建"
+          // 数字直接用 PRESET_EXERCISES.length 数出来，不写死 ——
+          // 写死的话，以后每加一批动作都得记得回来改这里，一定会忘
+          hint={`${PRESET_EXERCISES.length} 个预置动作 + 自建`}
           onClick={() => setSub('library')}
         />
         {/* 休息计时器：点一下展开秒数选项 */}
