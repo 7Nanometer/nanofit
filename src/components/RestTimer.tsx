@@ -24,9 +24,22 @@ import { setKeepAwake } from '../lib/wakelock'
 type Props = {
   endsAt: number // 休息结束的时间点（毫秒时间戳）
   onClose: () => void // 用户点"跳过"或点掉"休息结束"时通知外面
+  // 倒计时下面那行小字，比如"切到别的 App、锁屏，到点都会提醒你"。
+  // ★ 这行字现在是【真的会变】的：以前写的是"切走了手机就不会提醒你"，
+  //   那是当时的事实；现在装了系统通知，切走照样会响，那句话就成了假话。
+  //   所以交给外面（TrainScreen）算好再传进来 —— 它知道权限到底有没有。
+  notifyHint: string
+  // 传了这行字就变成可点的（用在"还没授权，点这里开启"那一档）。
+  // 不传就是一行普通说明文字。
+  onEnableNotify?: (() => void) | undefined
 }
 
-export function RestTimer({ endsAt, onClose }: Props) {
+export function RestTimer({
+  endsAt,
+  onClose,
+  notifyHint,
+  onEnableNotify,
+}: Props) {
   // 剩余秒数。注意它只是个"算出来的结果"，随时可以从 endsAt 重新算一遍。
   const [remain, setRemain] = useState(() =>
     Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)),
@@ -109,9 +122,20 @@ export function RestTimer({ endsAt, onClose }: Props) {
         <div className="text-2xl font-bold tabular-nums text-ink">
           {formatSec(remain)}
         </div>
-        <div className="mt-1 text-xs text-muted">
-          别切到别的 App —— 切走了手机就不会提醒你（浏览器的限制）
-        </div>
+        {/* 这行字有两种形态：
+            能点的（还没授权，点一下去开）和普通的（已经好了，或者网页版）。
+            能点的那种用主色写，让人看得出"这里有东西可以按"。 */}
+        {onEnableNotify !== undefined ? (
+          <button
+            type="button"
+            onClick={onEnableNotify}
+            className="mt-1 text-left text-xs text-brand underline"
+          >
+            {notifyHint}
+          </button>
+        ) : (
+          <div className="mt-1 text-xs text-muted">{notifyHint}</div>
+        )}
       </div>
       <button
         type="button"

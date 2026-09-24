@@ -27,6 +27,13 @@ import {
   sessionSeconds,
 } from '../lib/kcal'
 import {
+  askRestNotifyFirstTime,
+  getRestNotifyStatus,
+  requestRestNotify,
+  subscribeRestNotify,
+  syncRestNotify,
+} from '../lib/restnotify'
+import {
   clearActiveWorkout,
   readActiveWorkout,
   readBodyMetrics,
@@ -107,6 +114,21 @@ export function TrainScreen() {
     const saved = initialSession?.restEndsAt
     return saved !== undefined && saved > Date.now() ? saved : null
   })
+
+  // ---------- 后台提醒的状态（2026-09-24 加的）----------
+  //
+  // 只用来决定倒计时卡片下面那行小字说什么：
+  //   "切到别的 App 也会提醒你" / "开启通知权限才能在后台提醒 · 点这里开启"
+  //
+  // 【为什么不用在挂载时查一次】
+  // 用户点那行字会弹系统授权框，也可能跳到系统设置页 ——
+  // 回来时这一页并没有卸载（切到别的 App 不会卸载 React 组件）。
+  // 不订阅的话那行字会一直停在"未开启"，看着像没生效。
+  // restnotify.ts 那边每次回到前台都会重查，查完通知这里重画。
+  const [notifyStatus, setNotifyStatus] = useState(getRestNotifyStatus)
+  useEffect(() => {
+    return subscribeRestNotify(() => setNotifyStatus(getRestNotifyStatus()))
+  }, [])
 
   // 今天。
   // 用 useState 的惰性初始化，让它"显示这一页时只算一次"。
@@ -317,6 +339,19 @@ export function TrainScreen() {
     // 错过这一下，90 秒后想自动响铃就会被浏览器拒绝。
     unlockAudio()
     setRestEndsAt(restEndsAtNext)
+
+    // 通知那边"重新判断一次"。
+    //
+    // 【这时候人在前台，本该什么都不用做 —— 为什么还要调】
+    // 因为"切后台"那个信号（appStateChange）万一没送到（WebView 被系统
+    // 暂停过、事件丢了之类），手机上就可能留着一条过期的预约。
+    // 每个改动休息状态的地方都重新断言一次，这类残留就自己没了。
+    syncRestNotify()
+
+    // 第一次开始休息，顺手问一句要不要开后台提醒。
+    // 只问一次 —— 拒绝了就再也不弹，改成倒计时下面那行"点这里开启"。
+    // 放在最后，是因为前面记训练、开音响、起倒计时才是正事，绝不能挡在它前面。
+    void askRestNotifyFirstTime()
   }
 
   // 算热量估算用的体重。优先「身体数据」里最近一次，没记过才用设置里那个默认值。
@@ -391,6 +426,10 @@ export function TrainScreen() {
     if (session !== null) {
       persist({ ...session, restEndsAt: undefined })
     }
+    // ★ 通知那边也要跟着取消。
+    //   少了这一句就会出现最难受的那一幕：你已经跳过休息进了下一组，
+    //   手机到点还在响 —— 因为预约还留在系统里没人撤。
+    syncRestNotify()
   }
 
   // ---------- 删掉记错的一组 ----------
@@ -419,6 +458,9 @@ export function TrainScreen() {
     clearActiveWorkout()
     setSession(null)
     setRestEndsAt(null)
+    // 和 clearRest 同理：训练都结束了，系统里那条预约也必须撤掉，
+    // 不然你收拾东西走出健身房，手机还在包里响个不停
+    syncRestNotify()
   }
 
   // ---------- 结束训练 ----------
@@ -514,6 +556,27 @@ export function TrainScreen() {
     setMetPickerOpen(false)
   }
 
+  // ---------- 休息倒计时下面那行小字 ----------
+  //
+  // 分四种情况。分这么细是因为"切走之后到底会不会响"现在真的分好几种，
+  // 得说实话 —— 以前那行写的是"切走了就不会提醒你（浏览器的限制）"，
+  // 那句话现在是假的了。
+  const notifyHint = !notifyStatus.native
+    ? '网页版切走就收不到提醒了（装成 App 才行）'
+    : !notifyStatus.granted
+      ? '开启通知权限才能在后台提醒 · 点这里开启'
+      : notifyStatus.exact
+        ? '切到别的 App、锁屏，到点都会提醒你'
+        : '切到别的 App 也会提醒你（可能晚几秒）'
+
+  // 只有"还没授权"那一档才让这行字可以点。
+  // 其它几档要么没事了，要么（精确闹钟）该去设置页慢慢弄 ——
+  // 训练中间把人甩到系统设置页里，找不回来更麻烦。
+  const notifyAction =
+    notifyStatus.native && !notifyStatus.granted
+      ? () => void requestRestNotify()
+      : undefined
+
   return (
     <div>
       {/* ---------- 顶部：日期 / 小结 / 结束按钮 ---------- */}
@@ -546,7 +609,12 @@ export function TrainScreen() {
 
       {/* ---------- 休息倒计时 ---------- */}
       {restEndsAt !== null && (
-        <RestTimer endsAt={restEndsAt} onClose={clearRest} />
+        <RestTimer
+          endsAt={restEndsAt}
+          onClose={clearRest}
+          notifyHint={notifyHint}
+          onEnableNotify={notifyAction}
+        />
       )}
 
       {/* ---------- 每个动作一张卡片 ---------- */}

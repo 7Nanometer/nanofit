@@ -36,6 +36,7 @@
 
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
+import type { PermissionState } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { readActiveWorkout } from './storage'
 
@@ -74,6 +75,26 @@ let started = false // 初始化只能做一次
 let appActive = true // App 现在在不在前台
 let granted = false // 通知权限
 let exact = true // 精确闹钟权限（先当有，查到没有再改）
+
+// 通知权限的"原始"答案，四种取值：
+//   prompt                从没问过
+//   prompt-with-rationale 拒绝过一次，该先解释再问
+//   granted               已给
+//   denied                拒绝过了，别再烦他
+//
+// 【为什么要单独留着它，而不是只看 granted】
+// 决定"要不要弹系统那个授权框"要区分"没问过"和"拒绝过"：
+// 安卓上拒绝过之后系统就不再弹框了，白弹一次只会让人觉得 App 有毛病。
+// （安卓 13 起插件能分清这两者；13 以下没有通知权限这回事，一律返回 granted。）
+let display: PermissionState = 'prompt'
+
+// 这一次打开 App 里问过没有。
+//
+// 【为什么光靠 display 不够】
+// 安卓有个老毛病：用户勾了"不再询问"之后，系统会回答"没问过"。
+// 那就会一直弹我们的说明框，而他永远也授权不了。
+// 加上这个标记，至少"一次打开只问一次"。
+let askedThisRun = false
 
 const statusListeners = new Set<() => void>()
 const tapListeners = new Set<() => void>()
@@ -231,10 +252,10 @@ async function createChannel(): Promise<void> {
 async function readPermission(): Promise<void> {
   try {
     const res = await LocalNotifications.checkPermissions()
-    // display 有四种取值：granted（已给）/ denied（拒绝）/
-    // prompt（还没问过）/ prompt-with-rationale（拒绝过一次了）。
+    display = res.display
     // 只有 granted 才算能用。
-    granted = res.display === 'granted'
+    // （display 四种取值的含义见文件上面那段的注释。）
+    granted = display === 'granted'
   } catch {
     granted = false
   }
@@ -300,6 +321,46 @@ export async function openExactAlarmSetting(): Promise<void> {
   }
   // 回来之后再查一遍：他可能刚打开，也可能什么都没动
   void refreshRestNotify()
+}
+
+// 第一次开始组间休息时问一句"要不要开后台提醒"。
+//
+// 【为什么不放在 App 启动时】
+// 安卓上拒绝过之后系统就不再弹框了，第一次机会很宝贵 ——
+// 要挑用户"刚好需要它"的那一刻问。点完 ✓ 开始休息，90 秒后就要响了，
+// 这时候解释"想让它在后台也叫醒你吗"，是最说得通的。
+//
+// 【为什么这一步值得单独写一个函数】
+// 它串了三件事：应用内说明 → 系统通知权限框 → 系统「闹钟和提醒」页。
+// 中间任何一步用户不配合就停下，不再往下追问。写在一处才看得清这个链条。
+export async function askRestNotifyFirstTime(): Promise<void> {
+  // 已经能用了、或者这次打开已经问过、或者拒绝了 → 什么都不做。
+  // 界面上那行"点这里开启"一直在，他想开随时能开。
+  if (!isNative || granted || askedThisRun || display === 'denied') return
+  askedThisRun = true
+
+  const wants = window.confirm(
+    '想让倒计时在后台也叫醒你吗？\n\n' +
+      '允许之后，组间休息到点时就算你切到别的 App 或者锁屏了，' +
+      '手机也会响。\n\n' +
+      '不开启也不影响记录训练，只是切走之后就不会提醒你了。',
+  )
+  if (!wants) return
+
+  // ---------- 第一关：通知权限 ----------
+  const after = await requestRestNotify()
+  if (!after.granted) return
+
+  // ---------- 第二关：精确闹钟 ----------
+  // 没这个权限，通知会晚几秒到几十秒才响。
+  // 这个权限安卓不允许 App 自己开，只能把他送到系统设置页，开不开由他决定。
+  if (after.exact) return
+  const goSetting = window.confirm(
+    '还差最后一步。\n\n' +
+      '手机的「闹钟和提醒」权限没打开，提醒会晚几秒才响。\n\n' +
+      '点"确定"跳到系统设置，找到本应用并打开它。',
+  )
+  if (goSetting) await openExactAlarmSetting()
 }
 
 // ============================================================
