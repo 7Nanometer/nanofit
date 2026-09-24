@@ -1,7 +1,7 @@
 import type { Exercise, SetEntry, WorkoutSession } from '../types'
-import { exerciseName } from '../data/exercises'
+import { cardioIdSet, exerciseName } from '../data/exercises'
 import { formatDateCN } from '../lib/date'
-import { sessionVolume } from '../lib/calc'
+import { describeCardio, formatDuration, sessionVolume } from '../lib/calc'
 
 // ============================================================
 // 历史记录里的一条
@@ -33,6 +33,38 @@ export function SessionCard({
 }: Props) {
   const groups = groupByExercise(session, allExercises)
 
+  // ---------- 力量和有氧分开说话 ----------
+  //
+  // 【为什么必须分】
+  // 有氧记录的 weightKg 和 reps 都是 0（见 types.ts 的说明）。
+  // 不分开的话，摘要会显示成"3 个动作 · 3 组 · 总容量 0 kg"，
+  // 明细里每条都写"0 kg × 0" —— 数字全是真的，但一句都读不懂。
+  const cardioIds = cardioIdSet(allExercises)
+  const strengthEntries = session.entries.filter(
+    (s) => !cardioIds.has(s.exerciseId),
+  )
+  const cardioSeconds = session.entries
+    .filter((s) => cardioIds.has(s.exerciseId))
+    .reduce((sum, s) => sum + (s.durationSec ?? 0), 0)
+
+  // 收起时那行摘要：有几样说几样，没有的那一项整个不出现
+  const summaryParts: string[] = []
+  if (strengthEntries.length > 0) {
+    // 这里单独数一遍"几个动作"，不能用上面 groups.length ——
+    // 那个把有氧动作也算进去了
+    const strengthGroups = new Set(
+      strengthEntries.map((s) => s.exerciseId),
+    ).size
+    summaryParts.push(
+      `${strengthGroups} 个动作 · ${strengthEntries.length} 组 · 总容量 ${sessionVolume(
+        strengthEntries,
+      ).toLocaleString()} kg`,
+    )
+  }
+  if (cardioSeconds > 0) {
+    summaryParts.push(`有氧 ${formatDuration(cardioSeconds)}`)
+  }
+
   return (
     <div className="mb-2 rounded-xl border border-line bg-surface">
       {/* ---------- 收起来时的样子（整个卡片都能点） ---------- */}
@@ -49,35 +81,47 @@ export function SessionCard({
           <span className="shrink-0 text-muted">{expanded ? '收起' : '展开'}</span>
         </div>
         <div className="mt-1 text-sm text-muted">
-          {groups.length} 个动作 · {session.entries.length} 组 · 总容量{' '}
-          {sessionVolume(session.entries).toLocaleString()} kg
+          {summaryParts.join(' · ')}
         </div>
       </button>
 
       {/* ---------- 点开后的样子 ---------- */}
       {expanded && (
         <div className="border-t border-line p-3">
-          {groups.map((group) => (
-            <div key={group.exerciseId} className="mb-3 last:mb-0">
-              <div className="mb-1 text-sm font-medium text-ink-2">
-                {group.name}
-              </div>
-              {group.sets.map((set, index) => (
-                <div
-                  key={set.id}
-                  className="flex items-center gap-3 py-0.5 text-sm text-ink"
-                >
-                  <span className="w-4 text-muted">{index + 1}</span>
-                  <span>
-                    {set.weightKg} kg × {set.reps}
-                  </span>
-                  {set.rpe !== undefined && (
-                    <span className="text-xs text-muted">RPE {set.rpe}</span>
-                  )}
+          {groups.map((group) => {
+            const isCardio = cardioIds.has(group.exerciseId)
+            return (
+              <div key={group.exerciseId} className="mb-3 last:mb-0">
+                <div className="mb-1 text-sm font-medium text-ink-2">
+                  {group.name}
                 </div>
-              ))}
-            </div>
-          ))}
+                {group.sets.map((set, index) =>
+                  isCardio ? (
+                    // 有氧：一条就是一句话，没有组号也没有 RPE
+                    <div
+                      key={set.id}
+                      className="py-0.5 text-sm text-ink"
+                    >
+                      {describeCardio(set)}
+                    </div>
+                  ) : (
+                    <div
+                      key={set.id}
+                      className="flex items-center gap-3 py-0.5 text-sm text-ink"
+                    >
+                      <span className="w-4 text-muted">{index + 1}</span>
+                      <span>
+                        {set.weightKg} kg × {set.reps}
+                      </span>
+                      {set.rpe !== undefined && (
+                        <span className="text-xs text-muted">RPE {set.rpe}</span>
+                      )}
+                    </div>
+                  ),
+                )}
+              </div>
+            )
+          })}
 
           <button
             type="button"

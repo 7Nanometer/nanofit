@@ -1,11 +1,11 @@
 import type { Exercise, ExerciseKind } from '../types'
 
 // ============================================================
-// 40 个预置动作
+// 预置动作库
 // ============================================================
 //
 // 【为什么不放进 localStorage】
-// 这 40 个是"出厂设置"，直接写在代码里。好处：
+// 这些是"出厂设置"，直接写在代码里。好处：
 //   1. 不占用你手机那点宝贵的存储空间
 //   2. 跟着 git 一起存档，改错了能一键还原
 //   3. 导出备份时导出的只有"你自己的东西"，文件更干净
@@ -13,13 +13,27 @@ import type { Exercise, ExerciseKind } from '../types'
 // 【代价】
 // 预置动作不能删、不能改。想改成自己习惯的叫法，就新建一个自建动作。
 //
+// 【★ 已有动作的 id 一个都不能改】
+// 历史记录里的每一条都靠 id 指点名。改了 id，你练过的那条记录就
+// 变成"（已删除的动作）"。加新动作可以，改老 id 不行。
+//
 // 【id 的命名规矩】
 // 用"器械缩写-英文动作名"的写法，比如 bb-bench-press：
-//   bb    = barbell 杠铃        db    = dumbbell 哑铃
-//   mach  = 固定器械            cable = 绳索
-//   bw    = bodyweight 自重
+//   bb     = barbell 杠铃        db     = dumbbell 哑铃
+//   mach   = 固定器械            cable  = 绳索
+//   bw     = bodyweight 自重     smith  = 史密斯
+//   kb     = kettlebell 壶铃     cardio = 有氧器械/有氧动作
 // 用英文是因为 id 要长期存在数据里（历史记录会引用它），英文最稳当。
 // ============================================================
+
+// "户外跑"的 id，单独提出来当常量。
+//
+// 【为什么要提出来】
+// 录入有氧的那个面板里，只有"户外跑"需要多显示一个"操场模式"
+// （室内机器自己会显示距离，用不着按圈数算）。
+// 如果直接把 'cardio-outdoor-run' 写死在面板代码里，哪天改了这个 id
+// 就会有"改了这边忘了那边"的隐患 —— 提成常量，两处一定同步。
+export const OUTDOOR_RUN_ID = 'cardio-outdoor-run'
 
 export const PRESET_EXERCISES: Exercise[] = [
   // ---------------- 胸（7 个）----------------
@@ -73,6 +87,30 @@ export const PRESET_EXERCISES: Exercise[] = [
   { id: 'bw-hanging-leg-raise', name: '悬垂举腿', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '吊在单杠上，腿抬到和地面平行。重量填 0' },
   { id: 'cable-crunch', name: '绳索卷腹', muscleGroup: 'core', equipment: '绳索', isCustom: false, note: '跪姿，用腹肌把上半身往下卷，不是用手臂拉' },
   { id: 'bw-russian-twist', name: '俄罗斯转体', muscleGroup: 'core', equipment: '自重', isCustom: false, note: '坐姿上半身略微后仰，左右转动躯干。重量填 0' },
+
+  // ---------------- 有氧（11 个）----------------
+  //
+  // ★ 这一组全部带 kind: 'cardio'，是全库唯一的一批。
+  //   它决定了这些动作在训练页走"记时长"的表单，而不是"记重量×次数"；
+  //   也决定了它们在统计页会被排除在力量图表之外。
+  //
+  // 【怎么记】记时长（必填）+ 距离（可选）。重量和次数这两栏对它们没意义。
+  //   跳绳/开合跳/高抬腿也是记时长的 —— 按"跳了多少下"记反而不好对比强度。
+  // 【这个顺序不是随便排的】
+  // 前 5 个是最常用的，录入面板顶部的快选栏就按这个顺序长出来。
+  // 后面 6 个排在下面，但不影响搜索和筛选。
+  { id: 'cardio-treadmill', name: '跑步机', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '从慢走热身开始，别一上去就冲。速度调到"还能说短句"的强度就够了' },
+  { id: 'cardio-elliptical', name: '椭圆机', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '脚掌踩实别踮着，膝盖和脚尖朝前。对膝盖最友好的一种' },
+  { id: 'cardio-rower', name: '划船机', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '顺序是"腿蹬 → 身体后仰 → 手拉"，回来时反过来。别只用手臂拽' },
+  { id: 'cardio-spin-bike', name: '动感单车', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '先把座椅调到胯骨高度，蹬到底时膝盖别完全伸直' },
+  // ★ 这个 id 被 CardioForm 单独认出来，只有它才显示"操场模式"
+  { id: OUTDOOR_RUN_ID, name: '户外跑', muscleGroup: 'cardio', equipment: '自重', isCustom: false, kind: 'cardio', note: '落地轻一点、步频快一点。在操场上跑可以用"操场模式"按圈数算距离' },
+  { id: 'cardio-recumbent-bike', name: '卧式健身车', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '靠背式坐姿，腰有支撑，适合腰不好或想轻松骑的人' },
+  { id: 'cardio-stair-climber', name: '楼梯机', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '踩实整只脚，别只用前脚掌。手扶把手会省力，想练狠点就别扶' },
+  { id: 'cardio-air-bike', name: '风阻单车', muscleGroup: 'cardio', equipment: '有氧器械', isCustom: false, kind: 'cardio', note: '手脚一起蹬、一起推，特别累。适合做短时间高强度间歇' },
+  { id: 'cardio-jump-rope', name: '跳绳', muscleGroup: 'cardio', equipment: '自重', isCustom: false, kind: 'cardio', note: '手腕摇绳、小幅度起跳，落地前脚掌先着地' },
+  { id: 'cardio-jumping-jack', name: '开合跳', muscleGroup: 'cardio', equipment: '自重', isCustom: false, kind: 'cardio', note: '跳起时两脚分开、双手举过头顶。很好的热身动作' },
+  { id: 'cardio-high-knees', name: '高抬腿', muscleGroup: 'cardio', equipment: '自重', isCustom: false, kind: 'cardio', note: '原地快速交替抬膝到腰高，上半身别后仰' },
 ]
 
 // 把"预置的 40 个"和"你自己建的"拼成一个列表。
@@ -119,4 +157,11 @@ export function cardioIdSet(all: Exercise[]): Set<string> {
   return new Set(
     all.filter((e) => exerciseKind(e) === 'cardio').map((e) => e.id),
   )
+}
+
+// 挑出所有有氧动作，顺序不变（= 写在 PRESET_EXERCISES 里的先后顺序）。
+// 录入面板顶部的快选栏就是它长出来的，所以那个顺序是有意义的：
+// 最常用的五个排在最前面。
+export function cardioExercises(all: Exercise[]): Exercise[] {
+  return all.filter((e) => exerciseKind(e) === 'cardio')
 }

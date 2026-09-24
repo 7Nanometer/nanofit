@@ -160,3 +160,100 @@ export function bodyComposition(
 
   return { bmi: round1(bmiValue), bodyFat: fat }
 }
+
+// ============================================================
+// 有氧：田径场距离、配速、以及时间/距离的显示格式
+// ============================================================
+
+// ---------- 田径场 ----------
+//
+// 【为什么每条道不一样长】
+// 田径场里所有道的终点线是同一条，但外道的弯道半径更大 ——
+// 沿着外道跑一整圈，实际跑过的距离就更长。
+// 标准场地的道宽是 1.22 米，换算到一圈上大约多 7 米。
+//
+// 所以：第 1 道 400 米、第 2 道 407 米、第 3 道 414 米……
+//
+// 【为什么基准长度要能改】
+// 不是所有学校的操场都是标准 400 米，300 米、350 米的都有。
+// 所以第 1 道的长度做成可填的（默认 400）。
+// 每道 +7 米暂时写死 —— 真碰上道宽不一样的场地，改这一个常量就行。
+const TRACK_LANE_STEP_M = 7
+
+// 第 N 道跑一整圈是多少米
+export function trackLapMeters(lane: number, baseLapM = 400): number {
+  return baseLapM + (lane - 1) * TRACK_LANE_STEP_M
+}
+
+// 第 N 道跑 laps 圈一共多少米。圈数允许是小数（12.5 圈 = 五公里出头）
+export function trackDistanceM(lane: number, laps: number, baseLapM = 400): number {
+  return trackLapMeters(lane, baseLapM) * laps
+}
+
+// ---------- 配速 ----------
+//
+// 配速 = 跑一公里用了多少秒。跑者之间聊"快慢"用的就是这个，
+// 比"总共跑了多久"有用得多 —— 跑了 30 分钟可能是 3 公里也可能是 6 公里。
+//
+// 【为什么算不出来时返回 null 而不是 0】
+// 和体脂率那边一个道理：没填距离的时候，0 是个**假数字**，
+// 显示出来会让人以为你跑了一公里用了 0 秒。
+// null 表示"这项数据没有"，界面上直接不显示配速那一栏。
+export function paceSecPerKm(
+  durationSec: number,
+  distanceM: number,
+): number | null {
+  if (distanceM <= 0 || durationSec <= 0) return null
+  return durationSec / (distanceM / 1000)
+}
+
+// 360 → "6'00\""（6 分 00 秒每公里）
+export function formatPace(secPerKm: number): string {
+  const total = Math.round(secPerKm)
+  const min = Math.floor(total / 60)
+  const sec = total % 60
+  // padStart(2, '0')：只有 5 秒时补成 "05"，不然会显示成 6'5"
+  return `${min}'${String(sec).padStart(2, '0')}"`
+}
+
+// 秒 → 人话。1800 → "30 分钟"，3900 → "1 小时 5 分"
+export function formatDuration(sec: number): string {
+  const totalMin = Math.round(sec / 60)
+  if (totalMin < 60) return `${totalMin} 分钟`
+  const hours = Math.floor(totalMin / 60)
+  const minutes = totalMin % 60
+  if (minutes === 0) return `${hours} 小时`
+  return `${hours} 小时 ${minutes} 分`
+}
+
+// 米 → 人话。不到一公里时说米，更好读
+// （操场上一圈半说"600 米"比说"0.60 公里"自然）
+export function formatDistance(m: number): string {
+  if (m < 1000) return `${Math.round(m)} 米`
+  return `${(m / 1000).toFixed(2)} 公里`
+}
+
+// 把一条有氧记录描述成一句话，训练页和历史页共用。
+//
+// 例：跑了 30 分钟、5.00 公里 → "30 分钟 · 5.00 公里 · 配速 6'00"/公里"
+//
+// 【为什么抽成公用函数】
+// 训练页的卡片和历史页的明细都显示这个 —— 两处各写一遍的话，
+// 哪天想改格式（比如配速改成"每公里 6 分"）就得记得改两个地方，
+// 漏一个就会出现"同一件事在两个页面上长得不一样"。
+export function describeCardio(set: SetEntry): string {
+  const parts: string[] = []
+  if (set.durationSec !== undefined) parts.push(formatDuration(set.durationSec))
+  if (set.distanceM !== undefined) parts.push(formatDistance(set.distanceM))
+
+  // 只有时长和距离都有才算得出配速
+  const pace =
+    set.durationSec !== undefined && set.distanceM !== undefined
+      ? paceSecPerKm(set.durationSec, set.distanceM)
+      : null
+  if (pace !== null) parts.push(`配速 ${formatPace(pace)}/公里`)
+
+  // 理论上不会走到这儿（时长是必填的），但万一数据坏了，
+  // 显示一句"没有数据"也比显示一个空白格子让人以为界面坏了强
+  return parts.length > 0 ? parts.join(' · ') : '（没有数据）'
+}

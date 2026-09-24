@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { MUSCLE_GROUPS, MUSCLE_LABELS } from '../types'
 import type { Exercise, MuscleGroup } from '../types'
-import { mergeExercises } from '../data/exercises'
+import { exerciseKind, mergeExercises } from '../data/exercises'
 
 // ============================================================
 // 选动作的弹层
@@ -29,7 +29,14 @@ export function ExercisePicker({ customExercises, onPick, onClose }: Props) {
   const [keyword, setKeyword] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
 
-  const all = mergeExercises(customExercises)
+  // 【为什么要把有氧动作滤掉】
+  // 这个弹层的下一步是"渲染一张力量卡片"（重量 × 次数输入行）。
+  // 有氧动作在这条路上走不通 —— 它要的是"时长 + 距离"。
+  // 所以有氧有它自己的入口：训练页的"+ 记有氧"按钮。
+  // 不滤掉的话，在这里选中"跑步机"会得到一张填不了东西的卡片。
+  const all = mergeExercises(customExercises).filter(
+    (item) => exerciseKind(item) === 'strength',
+  )
   const kw = keyword.trim()
   const list = all.filter((item) => {
     if (filter !== 'all' && item.muscleGroup !== filter) return false
@@ -75,7 +82,10 @@ export function ExercisePicker({ customExercises, onPick, onClose }: Props) {
           >
             全部
           </button>
-          {MUSCLE_GROUPS.map((group) => (
+          {/* 肌群按钮里要去掉"有氧" —— 上面已经把有氧动作滤掉了，
+              留着这个按钮的话，点下去只会得到一片空白，
+              像是 App 坏了。全身那一类要留着，硬拉深蹲这些是能选的。 */}
+          {MUSCLE_GROUPS.filter((group) => group !== 'cardio').map((group) => (
             <button
               key={group}
               type="button"

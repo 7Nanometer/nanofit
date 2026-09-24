@@ -7,11 +7,16 @@ import type {
   Template,
   WorkoutSession,
 } from '../types'
-import { mergeExercises } from '../data/exercises'
+import { cardioIdSet, exerciseKind, mergeExercises } from '../data/exercises'
 import { registerBackHandler } from '../lib/backbutton'
 import { newId } from '../lib/id'
 import { formatDateCN, todayKey } from '../lib/date'
-import { sessionVolume, textToNumber } from '../lib/calc'
+import {
+  describeCardio,
+  formatDuration,
+  sessionVolume,
+  textToNumber,
+} from '../lib/calc'
 import { unlockAudio } from '../lib/beep'
 import {
   clearActiveWorkout,
@@ -23,6 +28,7 @@ import {
   writeActiveWorkout,
   writeSessions,
 } from '../lib/storage'
+import { CardioForm } from '../components/CardioForm'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { RestTimer } from '../components/RestTimer'
 import { SetRow } from '../components/SetRow'
@@ -54,6 +60,16 @@ export function TrainScreen() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
   const [storageError, setStorageError] = useState(false)
+
+  // ---------- 有氧录入面板 ----------
+  // cardioOpen 管"面板开没开"；cardioPresetId 是"打开时替用户选好了哪个动作"。
+  // 分成两个状态，是因为有两种打开方式：
+  //   点"+ 记有氧"        → 开，不预选（用户自己挑）
+  //   点卡片上的"再记一次" → 开，预选那个动作（省一次点击）
+  const [cardioOpen, setCardioOpen] = useState(false)
+  const [cardioPresetId, setCardioPresetId] = useState<string | undefined>(
+    undefined,
+  )
   // 休息倒计时"结束的时间点"。null 表示当前没在休息。
   // 注意存的是"结束时刻"而不是"还剩几秒"，原因见 RestTimer.tsx 的注释。
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
@@ -95,6 +111,35 @@ export function TrainScreen() {
 
   // session 里可能没有 exerciseIds 这个字段（早期版本存的数据），用 ?? [] 兜住
   const exerciseIds = session?.exerciseIds ?? []
+
+  // ---------- 把记录分成"力量"和"有氧"两拨 ----------
+  //
+  // 【为什么要分】
+  // 有氧记录也躺在 entries 里（这样历史页、导出备份、导入恢复全都自动带上，
+  // 不用改存储层）。但它的 weightKg 和 reps 都是 0 —— 占着位置但没有意义。
+  // 所以凡是按"组数""总容量"说话的地方，都只能数力量那一拨，
+  // 否则会显示成"3 组 · 总容量 0 kg"这种莫名其妙的话。
+  const cardioIds = cardioIdSet(allExercises)
+  const entries = session?.entries ?? []
+  const strengthEntries = entries.filter((s) => !cardioIds.has(s.exerciseId))
+  const cardioSeconds = entries
+    .filter((s) => cardioIds.has(s.exerciseId))
+    .reduce((sum, s) => sum + (s.durationSec ?? 0), 0)
+
+  // 顶部那行小结：有几样说几样，没有的那一项整个不出现
+  // （只练了有氧时不显示"0 组 · 总容量 0 kg"）
+  const summaryParts: string[] = []
+  if (strengthEntries.length > 0) {
+    summaryParts.push(
+      `${strengthEntries.length} 组 · 总容量 ${sessionVolume(
+        strengthEntries,
+      ).toLocaleString()} kg`,
+    )
+  }
+  if (cardioSeconds > 0) {
+    summaryParts.push(`有氧 ${formatDuration(cardioSeconds)}`)
+  }
+  const hasEntries = entries.length > 0
 
   // 先存进储物柜，再更新界面。所有改动数据的操作都走这一个出口。
   function persist(next: WorkoutSession) {
@@ -205,6 +250,59 @@ export function TrainScreen() {
     setRestEndsAt(Date.now() + settings.restSec * 1000)
   }
 
+  // ---------- 记一次有氧 ----------
+  //
+  // 【为什么它和上面的 addSet 是分开的两个函数】
+  // 力量是"点一次 ✓ 加一组"，有氧是"填完表单加一条"，两者的入口和
+  // 要填的东西完全不同。硬凑进一个函数会到处是 if，反而更难读。
+  //
+  // 【有氧为什么不触发休息倒计时】
+  // 那个 90 秒倒计时是给力量组间用的。跑完步不需要"休息 90 秒"。
+  function addCardio(
+    exerciseId: string,
+    durationSec: number,
+    distanceM: number | undefined,
+  ) {
+    const base: WorkoutSession = session ?? {
+      id: newId(),
+      date: todayKey(),
+      entries: [],
+      exerciseIds: [],
+    }
+
+    const entry: SetEntry = {
+      id: newId(),
+      exerciseId,
+      // 有氧没有重量和次数，填 0。
+      // 为什么不干脆不写这两个字段：见 types.ts 里 SetEntry 那段注释 ——
+      // 改成可选会让全项目好几处算法算出 NaN，然后污染所有图表。
+      weightKg: 0,
+      reps: 0,
+      completedAt: new Date().toISOString(),
+      durationSec,
+      // 没填距离时 distanceM 是 undefined，整个字段就不写进去，
+      // 而不是写个 0 —— "跑了 0 米"和"没记距离"是两回事。
+      // 统计页画"单次距离"那张图时要靠这个区分。
+      distanceM,
+    }
+
+    // 这个有氧动作今天记过没有？记过就不再重复塞进 exerciseIds，
+    // 否则卡片列表里会冒出两张一模一样的
+    const already = (base.exerciseIds ?? []).includes(exerciseId)
+
+    persist({
+      ...base,
+      exerciseIds: already
+        ? (base.exerciseIds ?? [])
+        : [...(base.exerciseIds ?? []), exerciseId],
+      entries: [...base.entries, entry],
+      startedAt: base.startedAt ?? new Date().toISOString(),
+    })
+
+    setCardioOpen(false)
+    setCardioPresetId(undefined)
+  }
+
   // ---------- 删掉记错的一组 ----------
   function removeSet(setId: string) {
     if (!session) return
@@ -225,9 +323,13 @@ export function TrainScreen() {
       return
     }
 
-    // 记了东西：先问一句，免得手滑点掉
+    // 记了东西：先问一句，免得手滑点掉。
+    // 问的话里把力量和有氧分开说 —— 只练了有氧时说"共 1 组"没人看得懂。
+    const what: string[] = []
+    if (strengthEntries.length > 0) what.push(`${strengthEntries.length} 组力量`)
+    if (cardioSeconds > 0) what.push(`有氧 ${formatDuration(cardioSeconds)}`)
     const confirmed = window.confirm(
-      `结束今天的训练吗？\n\n共 ${session.entries.length} 组，会存进历史记录。`,
+      `结束今天的训练吗？\n\n共 ${what.join(' + ')}，会存进历史记录。`,
     )
     if (!confirmed) return
 
@@ -248,8 +350,6 @@ export function TrainScreen() {
     setSession(null)
   }
 
-  const hasSets = (session?.entries.length ?? 0) > 0
-
   return (
     <div>
       {/* ---------- 顶部：日期 / 小结 / 结束按钮 ---------- */}
@@ -259,11 +359,7 @@ export function TrainScreen() {
             {formatDateCN(session?.date ?? today)}
           </h1>
           <p className="mt-0.5 text-sm text-muted">
-            {hasSets
-              ? `${session?.entries.length} 组 · 总容量 ${sessionVolume(
-                  session?.entries ?? [],
-                ).toLocaleString()} kg`
-              : '还没开始记'}
+            {hasEntries ? summaryParts.join(' · ') : '还没开始记'}
           </p>
         </div>
         {session !== null && (
@@ -272,7 +368,7 @@ export function TrainScreen() {
             onClick={finishWorkout}
             className="min-h-11 shrink-0 rounded-lg border border-line px-3 text-sm text-ink-2"
           >
-            {hasSets ? '结束训练' : '清空'}
+            {hasEntries ? '结束训练' : '清空'}
           </button>
         )}
       </div>
@@ -305,9 +401,14 @@ export function TrainScreen() {
             sets={sets}
             planned={planned}
             showRpe={settings.rpeEnabled}
+            isCardio={exerciseKind(exercise) === 'cardio'}
             onAddSet={(w, r, rpe) => addSet(id, w, r, rpe)}
             onRemoveSet={removeSet}
             onRemoveExercise={() => removeExercise(id)}
+            onAddMoreCardio={() => {
+              setCardioPresetId(id)
+              setCardioOpen(true)
+            }}
           />
         )
       })}
@@ -323,6 +424,24 @@ export function TrainScreen() {
         {exerciseIds.length === 0
           ? '+ 点这里添加动作，开始今天的训练'
           : '+ 添加动作'}
+      </button>
+
+      {/* ---------- 记一次有氧 ----------
+          和上面的"添加动作"并排，因为它是同一类操作（都是"给这次训练加点内容"）。
+
+          【为什么有氧要单独一个按钮】
+          它走的是完全不同的表单：只填时长和距离，不填重量和次数。
+          而且在动作库里选动作时，有氧那 11 个是被排除掉的（见 ExercisePicker），
+          所以必须有这么一个专门的入口，否则有氧根本记不了。 */}
+      <button
+        type="button"
+        onClick={() => {
+          setCardioPresetId(undefined)
+          setCardioOpen(true)
+        }}
+        className="mt-2 w-full rounded-xl border border-dashed border-line py-4 text-sm text-ink-2"
+      >
+        + 记有氧（跑步机 / 椭圆机 / 户外跑…）
       </button>
 
       {/* 一键套用模板：自动把一整套动作和目标组数次数填进来 */}
@@ -350,6 +469,18 @@ export function TrainScreen() {
           onClose={() => setTemplatePickerOpen(false)}
         />
       )}
+
+      {cardioOpen && (
+        <CardioForm
+          allExercises={allExercises}
+          initialExerciseId={cardioPresetId}
+          onSave={addCardio}
+          onCancel={() => {
+            setCardioOpen(false)
+            setCardioPresetId(undefined)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -364,18 +495,26 @@ function ExerciseCard({
   sets,
   planned,
   showRpe,
+  isCardio,
   onAddSet,
   onRemoveSet,
   onRemoveExercise,
+  onAddMoreCardio,
 }: {
   name: string
   equipment: string
   sets: SetEntry[]
   planned?: PlannedItem // 来自模板的"目标几组几次"。手动加的动作没有这个
   showRpe: boolean
+  // 这个动作是不是有氧。力量和有氧只差在"下半截"：
+  //   力量 → 列出一组组"80 kg × 8"，下面跟一个输入行
+  //   有氧 → 列出"30 分钟 · 5.00 公里 · 配速 6'00"/公里"，下面跟一个"再记一次"
+  // 卡片头（动作名、移除按钮）两者共用。
+  isCardio: boolean
   onAddSet: (weightKg: number, reps: number, rpe: number | null) => void
   onRemoveSet: (setId: string) => void
   onRemoveExercise: () => void
+  onAddMoreCardio: () => void
 }) {
   // 输入框里的内容按"文字"存，理由见 NumberField.tsx 的注释
   const [weightText, setWeightText] = useState('')
@@ -436,43 +575,76 @@ function ExerciseCard({
         </button>
       </div>
 
-      {/* ---------- 已经记好的组 ---------- */}
-      {sets.map((s, index) => (
-        <div
-          key={s.id}
-          className="mb-2 flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-sm"
-        >
-          <span className="w-4 shrink-0 text-muted">{index + 1}</span>
-          <span className="flex-1 text-ink">
-            {s.weightKg} kg × {s.reps}
-          </span>
-          {s.rpe !== undefined && (
-            <span className="shrink-0 text-xs text-muted">RPE {s.rpe}</span>
-          )}
+      {/* ---------- 下半截：有氧和力量在这里分道扬镳 ---------- */}
+      {isCardio ? (
+        <>
+          {/* 有氧每条就是一句话，没有组号也没有 RPE */}
+          {sets.map((s) => (
+            <div
+              key={s.id}
+              className="mb-2 flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-sm"
+            >
+              <span className="flex-1 text-ink">{describeCardio(s)}</span>
+              <button
+                type="button"
+                onClick={() => onRemoveSet(s.id)}
+                className="shrink-0 px-1 text-muted"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+
+          {/* 再记一次：直接带着这个动作打开录入面板，省掉"重新选一遍" */}
           <button
             type="button"
-            onClick={() => onRemoveSet(s.id)}
-            className="shrink-0 px-1 text-muted"
+            onClick={onAddMoreCardio}
+            className="mt-3 min-h-11 w-full rounded-lg border border-dashed border-line text-sm text-ink-2"
           >
-            ×
+            + 再记一次
           </button>
-        </div>
-      ))}
+        </>
+      ) : (
+        <>
+          {/* ---------- 已经记好的组 ---------- */}
+          {sets.map((s, index) => (
+            <div
+              key={s.id}
+              className="mb-2 flex items-center gap-2 rounded-lg bg-bg px-3 py-2 text-sm"
+            >
+              <span className="w-4 shrink-0 text-muted">{index + 1}</span>
+              <span className="flex-1 text-ink">
+                {s.weightKg} kg × {s.reps}
+              </span>
+              {s.rpe !== undefined && (
+                <span className="shrink-0 text-xs text-muted">RPE {s.rpe}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onRemoveSet(s.id)}
+                className="shrink-0 px-1 text-muted"
+              >
+                ×
+              </button>
+            </div>
+          ))}
 
-      {/* ---------- 输入行 ---------- */}
-      <div className="mt-3">
-        <SetRow
-          weightText={weightText}
-          repsText={repsText}
-          rpeText={rpeText}
-          showRpe={showRpe}
-          onWeightChange={setWeightText}
-          onRepsChange={setRepsText}
-          onRpeChange={setRpeText}
-          onConfirm={handleConfirm}
-          canConfirm={canConfirm}
-        />
-      </div>
+          {/* ---------- 输入行 ---------- */}
+          <div className="mt-3">
+            <SetRow
+              weightText={weightText}
+              repsText={repsText}
+              rpeText={rpeText}
+              showRpe={showRpe}
+              onWeightChange={setWeightText}
+              onRepsChange={setRepsText}
+              onRpeChange={setRpeText}
+              onConfirm={handleConfirm}
+              canConfirm={canConfirm}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }
