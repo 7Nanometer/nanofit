@@ -34,12 +34,15 @@
 
 ## 数据模型
 
-Exercise { id, name, muscleGroup, equipment, isCustom, note? }
-SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt }
+Exercise { id, name, muscleGroup, equipment, isCustom, kind?, note? }
+SetEntry { id, exerciseId, weightKg, reps, rpe?, completedAt, durationSec?, distanceM? }
 WorkoutSession { id, date, name?, entries: SetEntry[], note?, durationSec? }
 Template { id, name, items: { exerciseId, targetSets, targetReps }[] }
 BodyMetric { date, weightKg, heightCm?, bodyFat?, bodyFatSource? }
 Settings { restSec, rpeEnabled, sex?, birthYear?, theme? }
+
+肌群 8 个：chest / back / legs / shoulders / arms / core / fullbody / cardio
+器械 8 种：杠铃 / 哑铃 / 史密斯 / 固定器械 / 绳索 / 自重 / 壶铃 / 有氧器械
 
 2026-09-23 按主人决定：
 - BodyMetric 加 heightCm
@@ -47,6 +50,27 @@ Settings { restSec, rpeEnabled, sex?, birthYear?, theme? }
   这两个数在界面上必须分开显示，绝不混在一起。没有这个字段的老记录一律当 measured。
 - Settings 加 sex 和 birthYear（体脂率公式要用）。存出生年份而不是年龄，过生日自动长一岁。
 - Settings 加 theme：'light' / 'dark'。没选过（undefined）一律按夜间，和原来的观感一致。
+
+2026-09-24 按主人决定（加有氧）：
+- MUSCLE_GROUPS 从 6 个扩到 8 个，新增 fullbody（全身）和 cardio（有氧）。
+  MUSCLE_LABELS 是穷尽 Record，漏写中文会编译报错——这是故意的，别绕开。
+- 新增 EQUIPMENTS 词表（见上）。`Exercise.equipment` **类型保持 string 不收窄**，
+  因为老自建动作里可能有"史密斯机"这种自由文字，收窄后运行时照样是任意字符串，
+  查表得 undefined。改为"只在新建表单和筛选按钮里用 EQUIPMENTS 约束新数据"。
+- Exercise 加 kind：'strength' / 'cardio'，**可选**。读取一律走
+  `exerciseKind(e)`（在 src/data/exercises.ts），内部兜底 `kind ?? 'strength'`。
+  ★ 兜底必须写在消费点：手机盘上已有的老数据不经过导入备份，只在导入点补字段会漏。
+- SetEntry 加 durationSec? 和 distanceM?（有氧用）。
+  ★ weightKg / reps **保持必填**，有氧记录填 0。改成可选会让全项目 6 处算出 NaN
+  并污染所有图表，而填 0 时 0×0=0 天然无害，只需在"显示"处按 kind 分支。
+- 有氧记录进**现有的 entries 数组**，靠 exerciseId 指向动作 + exerciseKind 区分。
+  ★ 不新开存储键：另开键必须同步改 json.ts 的 buildBackup/importBackup/isBackup，
+  那才是真会丢数据的地方。塞进 entries 则历史页、导出、导入全自动带上。
+- 分流靠 `cardioIdSet(all)` 把 sessions 切成"只有力量"和"只有有氧"两份视图，
+  再喂给现有统计函数——**stats.ts 的函数签名一个都不用改**。
+- 有氧公式（src/lib/calc.ts）：田径场第 1 道算 400 米，每往外一道 +7 米；
+  配速 = 秒 ÷ 公里数。
+- **不做 GPS 定位测距**（主人明确否决：耗电、精度、权限链路，且会偏离"记录本"定位）。
 
 localStorage 前缀 nanofit:v1:。读写集中在 src/lib/storage.ts。支持导出/导入 JSON。
 

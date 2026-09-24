@@ -1,4 +1,4 @@
-import type { Exercise } from '../types'
+import type { Exercise, ExerciseKind } from '../types'
 
 // ============================================================
 // 40 个预置动作
@@ -90,4 +90,33 @@ export function mergeExercises(custom: Exercise[]): Exercise[] {
 // 这时返回一句提示，而不是留一片空白让人以为界面坏了。
 export function exerciseName(all: Exercise[], id: string): string {
   return all.find((e) => e.id === id)?.name ?? '（已删除的动作）'
+}
+
+// 这个动作是力量还是有氧？
+//
+// 【为什么必须兜底】
+// kind 这个字段是 2026-09-24 才加的。在那之前存下来的动作（你手机里
+// 已有的自建动作、从旧备份导入的动作）**根本没有这个字段**，读出来是
+// undefined。所以这里统一兜底成 'strength' —— 老动作本来就全是力量的。
+//
+// ★ 兜底写在这里、而不是"导入备份时补上"，是因为老数据不只有导入
+//   这一条路：手机盘上那份 nanofit:v1:sessions 是新版第一次打开时
+//   直接读的，压根不经过导入。写在消费点才能全覆盖。
+export function exerciseKind(exercise: Exercise | undefined): ExerciseKind {
+  return exercise?.kind ?? 'strength'
+}
+
+// 把"所有有氧动作的 id"收集成一个 Set，给统计页筛数据用。
+//
+// 【为什么返回 Set 而不是数组】
+// 统计页要拿它判断成千上万条记录，Set 的查找是"一步到位"，
+// 数组的 includes 是"从头翻到尾"。数据一多差距很明显。
+//
+// 【为什么要"所有动作"而不是只挑有氧】
+// 判断一条记录是不是有氧，只能靠它的 exerciseId 指向哪个动作。
+// 所以得先把动作库整个过一遍，把有氧的那几个挑出来。
+export function cardioIdSet(all: Exercise[]): Set<string> {
+  return new Set(
+    all.filter((e) => exerciseKind(e) === 'cardio').map((e) => e.id),
+  )
 }
