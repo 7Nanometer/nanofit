@@ -274,7 +274,9 @@ BMI = 体重kg ÷ 身高m²
 组间休息到点时，切到别的 App、锁屏也要能提醒。**原理是把"到点叫我"交给安卓系统
 预约一个闹钟**，而不是让 App 自己掐表 —— App 一进后台，网页自己的定时器就被降频甚至冻住。
 
-全部在 `src/lib/restnotify.ts`（网页端整条链路空转，一行原生代码都不执行）。
+绝大部分在 `src/lib/restnotify.ts`（网页端整条链路空转，一行原生代码都不执行）。
+**唯一一处原生代码**是 `android/.../MainActivity.java` —— 它负责亲手建通知渠道，
+理由见下面"渠道"那一条。
 
 - ★★ **核心是一条不变式，只有一个出口**：
   `预约 ⟺ 在手机上 且 通知权限已给 且 App 不在前台 且 休息没结束`，其余一律取消。
@@ -282,10 +284,30 @@ BMI = 体重kg ÷ 身高m²
   分开写一定会漏出口（切 tab / 点跳过 / 训练结束 / 权限被撤销…）。
 - **它不接参数，自己去读存档**（`readActiveWorkout()?.restEndsAt`）：
   切 tab 会把训练页整个卸载，那时只有读存档才拿得到"休息到几点结束"。
-- 通知渠道：id `rest-timer`、**重要性 4(HIGH)**、锁屏可见、开震动、**不传 sound**。
-  不传 = 用系统默认通知音；传了插件只认塞进 App 的音频文件，反而容易变成没声音。
-  ⚠️ **渠道的 importance 建好之后改不了**（安卓的限制，不是 bug），第一次就得对。
-  ⚠️ 安卓 7 上 `createChannel` 会直接抛错，要包一层 catch。
+- ★★ **通知渠道由 [MainActivity.java](android/app/src/main/java/com/nanometer7/nanofit/app/MainActivity.java)
+  亲手建，不走插件的 `createChannel`**（2026-09-26 改，震动那条踩过大坑）。
+  渠道：id `rest-timer-v2`、**重要性 4(HIGH)**、锁屏可见、`enableVibration(true)`、
+  **带明确的震动节奏** `new long[]{0,400,250,400}`、**不设 sound**（= 系统默认通知音）。
+  - **为什么必须自己建**：插件的 `createChannel` 只会调 `enableVibration(true)`，
+    **从不设震动节奏**（整个 local-notifications 插件里搜不到一处 `setVibrationPattern`）。
+    而"开了震动开关、没给节奏"在真机上**就是不震**，而且系统设置里那个渠道
+    **连「震动」这一项都不显示**。真机实测 12 次全不震，换成自己建 + 给节奏之后
+    **每次都震**。★ 系统设置里显不显示那一项**不等于**震不震，别拿它当判据。
+  - **为什么放在 `onCreate` 里**：`createNotificationChannel()` 对**已存在**的渠道
+    是空操作，谁先建谁说了算；`MainActivity.onCreate` 跑在网页加载之前，一定赢过插件。
+  - **`REST_CHANNEL_ID` 必须和 `restnotify.ts` 的 `CHANNEL_ID` 一字不差**，
+    对不上的话这里建的没人用，通知会落回插件建的那个（没节奏的那个）。
+  - ⚠️ 整段包在 try/catch 里 —— 建渠道失败最多是不震，但 **App 必须能打开**（数据在 App 里）。
+  - ⚠️ Java 源码里的中文（渠道名/描述）有被 Gradle 用错编码搞坏的风险
+    （和 build.gradle 里那个 `·` 是同一类坑）。打完包要去 **dex** 里按 UTF-8
+    原始字节核对一遍。★ 这个包是**分包**的（11 个 dex），自己写的类在
+    `classes11.dex` 里 —— 只在 `classes.dex` 里找会什么都找不到，误判成"编码坏了"。
+  - ⚠️ 安卓 7 上 `createChannel` 会直接抛错，要包一层 catch。
+- **旧渠道 `rest-timer` 要删掉**：换编号时留下的，不删的话系统设置里会有
+  两条都叫「组间休息」，主人不知道该看哪条（真机反馈过）。
+  ★ 但 **只在"新渠道确实存在"的前提下才删** —— 反过来的话，万一新渠道没建起来、
+  旧的又删了，安卓 8 起"渠道不存在"的通知会被**直接丢掉**，提醒彻底失效。
+  所以 `removeLegacyChannel()` 先 `listChannels()` 确认新的在，再动旧的。
 - ★★ **通知 id 按"这条提醒的结束时刻"算，不是固定数字**（2026-09-26 改，踩过大坑）。
   插件源码里**写死**了一句 `mBuilder.setOnlyAlertOnce(true)`
   （`LocalNotificationManager.kt:199`，没有任何开关能关掉它）。含义是：
@@ -313,6 +335,14 @@ BMI = 体重kg ÷ 身高m²
   ⚠️ 撤销它时安卓会**重启 App 并清空所有已预约的精确闹钟**，
   所以每次回到前台都要重查一遍、需要时重新预约。
   没给也不用手写降级 —— 插件自己会退回不精确闹钟（`setExactIfPossible`）。
+  ⚠️⚠️ **但这个"退回"是【悄悄的】**：插件只在 logcat 里打一句 warn，
+  JS 那边 `schedule()` 照常 resolve，我们这边的 catch 碰不到
+  （`LocalNotificationManager.kt:357-372`）。它换用的是 `setAndAllowWhileIdle` ——
+  **不精确的闹钟系统可以推迟几分钟甚至几十分钟**，表现就是"通知压根没来"，
+  而 App 里一切正常、毫无提示。真机排查时先看这一条。
+  ★ 插件另有个"硬失败"开关：通知上写 `isExactMandatory: true`，
+  没授权时整批 `schedule()` 会被 reject（我们就能 catch 到、在界面上说出来）。
+  代价是那时**一条提醒都发不出去**。取舍见当时的决定，目前**没用**它。
 - ★ 查源码才知道的两件事，别凭印象改：
   · **Capacitor 切后台不冻结 WebView**（`Bridge.onPause()` 只是通知各插件），
     所以 `appStateChange` 里调 `schedule()` 来得及。被冻的是网页自己的定时器 ——
