@@ -43,20 +43,66 @@ import { readActiveWorkout } from './storage'
 // 现在是不是跑在手机上。浏览器里打开时是 false。
 const isNative = Capacitor.isNativePlatform()
 
-// 休息提醒在系统里的编号。
+// 休息提醒在系统里的编号怎么算。
 //
-// ★固定用 1，是故意的：安卓认这个号来"覆盖"——
-// 用同一个号再预约一次，旧的那条会被顶掉，所以同一时刻
-// 只可能存在一条休息提醒，不会攒出一排。
-export const REST_NOTIFY_ID = 1
+// 【为什么不固定用一个号】（2026-09-26 改，这是"只有第一条会响会震"的根因）
+//
+// 插件源码里写死了一句（LocalNotificationManager.kt:199，没有任何开关能关掉）：
+//
+//     mBuilder.setOnlyAlertOnce(true)
+//
+// 它的含义是：**同一个编号的通知再次出现时，系统当成"更新"** ——
+// 只换文字，不再响、不再震、不弹横幅。
+//
+// 而这里原来固定用 1 号（注释还写着"是故意的，让旧的那条被顶掉"）。
+// 两句一撞，结果就是：当天第一条提醒响过之后，后面每一条都悄没声地
+// 换一下文字 —— 既没声音也没震动，看着像坏了。
+//
+// 【新算法：按这条提醒的结束时刻算一个号】
+// 两条性质都保住了：
+//   · 两次【不同】的休息 → 结束时刻不同 → 号不同
+//     → 每条都是全新的一条 → 该响就响、该震就震
+//   · 【同一次】休息重复预约（App 被杀掉又打开之类）→ 结束时刻没变
+//     → 号相同 → 顶掉旧的，不会攒出两条
+//     （这正是原来固定用 1 号想要的效果，保住了）
+//
+// 号段是 1,000,000 ~ 1,000,999,999，远小于安卓要求的 32 位整数上限
+// （约 21.4 亿），也不会跟「试一下」那一段（见下面 TEST_NOTIFY_ID_BASE）相交。
+// Math.round 是保险：万一哪天传进来一个带小数的时刻，取整后安卓才收。
+const REST_NOTIFY_ID_BASE = 1_000_000
 
-// 设置页那个「试一下」按钮用另一个号。
-// 它跟真正的休息提醒不是一回事，用同一个号会互相顶掉。
-const TEST_NOTIFY_ID = 99
+function restNotifyIdFor(endsAt: number): number {
+  return REST_NOTIFY_ID_BASE + (Math.round(endsAt) % 1_000_000_000)
+}
+
+// 最近一次预约出去的那个号。发新的之前要拿它把旧的撤掉 —— 号换了，
+// 不撤的话通知栏里会攒出一排。
+//
+// 【忘了也不要紧】它只在 App 活着的时候记得住。就算重启后丢了，
+// 因为号是从结束时刻算出来的，同一次休息再预约还是同一个号，
+// 照样会顶掉旧的、不会攒出两条。
+let lastRestNotifyId: number | null = null
 
 // 通知渠道的编号（安卓 8 起，每条通知都必须属于某个"渠道"）。
 // 详见下面 createChannel() 那段注释。
 const CHANNEL_ID = 'rest-timer'
+
+// 设置页那个「试一下」按钮用【另一段号】。
+// 号段分开，就不会跟真正的休息提醒互相顶掉：
+//   休息提醒：1,000,000 ~ 1,000,999,999
+//   试一下  ：2,000,000,000 ~ 2,099,999,999
+// 两段完全不相交，而且都在安卓要求的 32 位整数范围内。
+//
+// ⚠️ 上面那个模数（1 亿）不是随便取的：2,000,000,000 + 99,999,999
+// 正好卡在安卓的上限 2,147,483,647 以下。要是照抄休息提醒那边的 10 亿，
+// 最大能算到 30 亿 —— 溢出成负数，安卓那边直接懵。
+// （这个坑是测试当场抓出来的，见这次提交的说明。）
+const TEST_NOTIFY_ID_BASE = 2_000_000_000
+const TEST_NOTIFY_ID_MOD = 100_000_000
+
+// 每次点都算一个新号，理由和上面一样：固定用同一个号的话，
+// 插件那句 setOnlyAlertOnce(true) 会让你连点两次时第二次不响也不震。
+// 两次点击要正好隔 27 小时 46 分才会撞号，实际上碰不到。
 
 // 点「试一下」之后，过多久响。留 5 秒够你把 App 切到后台。
 const TEST_DELAY_MS = 5000
@@ -166,11 +212,22 @@ export function syncRestNotify(): void {
 // ============================================================
 
 async function scheduleRest(endsAt: number): Promise<void> {
+  const id = restNotifyIdFor(endsAt)
+
+  // 换了号 → 先把上一条撤掉，免得通知栏里攒出一排。
+  //
+  // 同一个号（同一次休息重复预约）就【跳过】这步：
+  // 下面 schedule 自己会把旧的顶掉；而且这时候撤掉再发，
+  // 反而可能让已经响过的那条重新响一次，更吵。
+  if (lastRestNotifyId !== null && lastRestNotifyId !== id) {
+    await cancelRest()
+  }
+
   try {
     await LocalNotifications.schedule({
       notifications: [
         {
-          id: REST_NOTIFY_ID,
+          id,
           title: '休息结束',
           body: '该下一组了',
           channelId: CHANNEL_ID,
@@ -186,6 +243,8 @@ async function scheduleRest(endsAt: number): Promise<void> {
         },
       ],
     })
+    // 预约成功了才记下来 —— 失败了就没什么可撤的
+    lastRestNotifyId = id
   } catch {
     // 通知权限被系统关掉了 —— 插件的 schedule() 会直接报错
     // （源码里写死了 "Notifications not enabled on this device"）。
@@ -198,9 +257,17 @@ async function scheduleRest(endsAt: number): Promise<void> {
 }
 
 async function cancelRest(): Promise<void> {
+  // 先把号取走再清空 —— 万一下面抛错，也不会留下一个"其实已经撤了"的号
+  const id = lastRestNotifyId
+  lastRestNotifyId = null
+
   try {
-    // ① 取消"还没到点"的那条
-    await LocalNotifications.cancel({ notifications: [{ id: REST_NOTIFY_ID }] })
+    // ① 取消"还没到点"的那条。
+    //    ★ 必须按【记下来的那个号】撤，不能写死一个数字 ——
+    //      每条休息提醒的号都不一样了（理由见上面 restNotifyIdFor 那段）。
+    if (id !== null) {
+      await LocalNotifications.cancel({ notifications: [{ id }] })
+    }
     // ② 把"已经显示在通知栏上"的那条也擦掉。
     //    少了这步，你回到 App 之后通知栏里那个"休息结束"还挂在那儿。
     await LocalNotifications.removeAllDeliveredNotifications()
@@ -428,7 +495,7 @@ export async function sendTestNotification(): Promise<boolean> {
     await LocalNotifications.schedule({
       notifications: [
         {
-          id: TEST_NOTIFY_ID,
+          id: TEST_NOTIFY_ID_BASE + (Date.now() % TEST_NOTIFY_ID_MOD),
           title: '休息结束',
           body: '该下一组了（这是一条测试提醒）',
           channelId: CHANNEL_ID,
