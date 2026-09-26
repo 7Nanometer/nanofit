@@ -144,8 +144,16 @@ export function MetPicker({
           )}
         </div>
 
-        {/* ---------- 五档（数组顺序 = 从弱到强）---------- */}
-        <div className="mb-2 flex flex-wrap gap-2">
+        {/* ---------- 五档（数组顺序 = 从弱到强）----------
+            【为什么竖着排五行，而不是让它们自己折行】
+            原来是 flex-wrap：五个按钮宽窄不一，"中高强度 5.0"比"中等 3.5"宽
+            一大截，折出来的行参差不齐，看着就挤。改成一行一个、占满宽度，
+            每行都是完整的点击区域，反而更清爽。
+            【为什么 MET 值单独靠右对齐】
+            五个数字对齐成一列，才能一眼比出"这几档差多少"——
+            主人原话是"不然我选的时候不知道差别有多大"。
+            tabular-nums 是让数字等宽，不然 3.5 和 6.0 的小数点会对不齐。 */}
+        <div className="mb-2 grid gap-2">
           {STRENGTH_MET_INFO.map((item) => {
             const active = item.key === level
             return (
@@ -154,24 +162,28 @@ export function MetPicker({
                 type="button"
                 onClick={() => setLevel(item.key)}
                 // min-h-11 = 44 像素，手指点得准的最小尺寸
-                className={`min-h-11 rounded-lg border px-3 text-sm ${
+                className={`flex min-h-11 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm ${
                   active
                     ? 'border-brand bg-brand font-semibold text-on-brand'
                     : 'border-line text-ink-2'
                 }`}
               >
-                {item.label}
-                <span className={active ? 'opacity-80' : 'text-muted'}>
-                  {' '}
-                  {item.met.toFixed(1)}
-                </span>
+                {/* flex-1 把档位名撑开，后面的东西自然被推到右边 */}
+                <span className="flex-1">{item.label}</span>
                 {/* 系统推的那一档标一下。选中时整块是橙红的，
                     所以那个小字的颜色要跟着变，不然看不见 */}
                 {item.key === recommended && (
-                  <span className={`ml-1 text-xs ${active ? '' : 'text-brand'}`}>
+                  <span className={`text-xs ${active ? '' : 'text-brand'}`}>
                     建议
                   </span>
                 )}
+                <span
+                  className={`w-8 text-right tabular-nums ${
+                    active ? 'opacity-80' : 'text-muted'
+                  }`}
+                >
+                  {item.met.toFixed(1)}
+                </span>
               </button>
             )
           })}
