@@ -5,16 +5,13 @@ import { PRESET_EXERCISES } from '../data/exercises'
 import { registerBackHandler } from '../lib/backbutton'
 import { downloadBackup, importBackup } from '../lib/json'
 import {
-  currentChannelId,
   getRestNotifyStatus,
   openExactAlarmSetting,
-  readNotifyDiag,
   refreshRestNotify,
   requestRestNotify,
   sendTestNotification,
   subscribeRestNotify,
 } from '../lib/restnotify'
-import type { NotifyDiag } from '../lib/restnotify'
 import { isOnPhone } from '../lib/savefile'
 import { readSettings, writeSettings } from '../lib/storage'
 import { applyTheme } from '../lib/theme'
@@ -95,25 +92,6 @@ export function SettingsScreen() {
         ? '已预约，5 秒后响。可以现在就把 App 切到后台试试。'
         : '没能发出去 —— 先把上面的「通知权限」打开。',
     )
-  }
-
-  // ---------- 诊断（2026-09-26 临时加的，确认完就删） ----------
-  //
-  // 真机上"到点不响不震"这件事，在电脑上一点也复现不了 —— 电脑没渠道、
-  // 没系统闹钟、也没那块震动马达。所以把【手机系统里的真值】读出来摆在
-  // 屏幕上，就不用来回猜了。
-  //
-  // ★ 点一下才去读，不在挂载时读 —— 免得白占 App 启动的时间。
-  const [diag, setDiag] = useState<NotifyDiag | null>(null)
-  const [diagBusy, setDiagBusy] = useState(false)
-
-  async function runDiag() {
-    setDiagBusy(true)
-    try {
-      setDiag(await readNotifyDiag())
-    } finally {
-      setDiagBusy(false)
-    }
   }
 
   const weightValue = textToNumber(weightText)
@@ -390,48 +368,6 @@ export function SettingsScreen() {
                 {testResult !== null && (
                   <p className="text-xs text-muted">{testResult}</p>
                 )}
-
-                {/* ---------- 诊断（2026-09-26 临时加的，确认完就删） ----------
-                    真机上"到点不响不震"这件事电脑上复现不了：电脑没渠道、
-                    没系统闹钟、也没那块震动马达。所以让 App 把【手机系统里的
-                    真值】念出来 —— 比来回猜快得多（这一轮已经猜错过一次）。
-                    ★ 这里全是"读"：不改渠道、不发通知，不可能把能用的弄坏。 */}
-                <div className="rounded-lg border border-line p-3">
-                  <div className="text-sm font-medium text-ink">诊断（临时）</div>
-                  <p className="mt-1 text-xs text-muted">
-                    下面是从手机系统里<strong>读回来</strong>的真值，不是我们请求的值。
-                    渠道建好之后只有系统说了算，所以要看真实的那一份。
-                    查完"到点不响不震"这个问题就会把这个按钮删掉。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void runDiag()}
-                    className="mt-2 min-h-11 w-full rounded-lg border border-line px-4 text-sm text-ink-2"
-                  >
-                    {diagBusy ? '读取中…' : '读一下现在的状态'}
-                  </button>
-                  {diag !== null && (
-                    <div className="mt-2 space-y-1 text-xs break-all text-muted">
-                      <div>本次用的渠道编号：{currentChannelId()}</div>
-                      <div>
-                        原生建渠道的暗号：
-                        {diag.nativeMark ?? '（没读到 —— 原生那段可能没跑成）'}
-                      </div>
-                      <div>
-                        排在队里、还没到点的提醒：
-                        {diag.pending < 0 ? '读不到' : `${diag.pending} 条`}
-                      </div>
-                      <div>手机上共有 {diag.channels.length} 条通知渠道：</div>
-                      {diag.channels.map((c) => (
-                        <div key={c.id}>
-                          · {c.id}｜名字「{c.name}」｜重要度 {c.importance}｜
-                          震动 {c.vibration ? '开' : '关'}｜声音{' '}
-                          {c.hasSound ? '有' : '无'}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </>
             )}
           </div>

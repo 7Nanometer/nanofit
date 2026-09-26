@@ -38,7 +38,6 @@ import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import type { PermissionState } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
-import { Preferences } from '@capacitor/preferences'
 import { readActiveWorkout } from './storage'
 
 // 现在是不是跑在手机上。浏览器里打开时是 false。
@@ -102,8 +101,11 @@ let lastRestNotifyId: number | null = null
 //      那边建完了，插件这边的 createChannel 就自动变成空操作
 //      （createNotificationChannel 对已存在的渠道是 no-op）。
 //
-// 旧渠道 'rest-timer' 不用管：它再也不会被用到，会在系统设置里慢慢变成
-// 一条没人动的记录。
+// 旧渠道的编号。它再也不会被用到，但会一直挂在系统的通知设置里 ——
+// 留着会让你看到两条名字一样的「组间休息」，不知道该看哪条。
+// 所以下面 removeLegacyChannel() 会在新渠道确实建好之后把它删掉。
+const LEGACY_CHANNEL_ID = 'rest-timer'
+
 const CHANNEL_ID = 'rest-timer-v2'
 
 // 设置页那个「试一下」按钮用【另一段号】。
@@ -461,6 +463,8 @@ export function initRestNotify(): void {
 
   void (async () => {
     await createChannel()
+    // 建好新的之后，才去删旧的那条（顺序不能反，理由见 removeLegacyChannel）
+    await removeLegacyChannel()
     await readPermission()
     await readExactAlarm()
     emitStatus()
@@ -535,77 +539,27 @@ export async function sendTestNotification(): Promise<boolean> {
 }
 
 // ============================================================
-// 七、诊断（2026-09-26 临时加的，确认完就删）
+// 七、清理：把以前那条没人用的旧渠道删掉（2026-09-26 加）
 // ============================================================
 //
-// 【为什么需要它】
-// 真机上出的问题，在电脑上一点也复现不了：响不响、震不震、那个渠道到底是什么
-// 设置，全只有那台手机知道。与其来回猜（这一轮已经猜错过一次），不如让 App
-// 自己把【从系统里读回来的真值】摆在屏幕上。
+// 换渠道编号时留下的：旧渠道 'rest-timer' 已经没有任何通知会用到它，
+// 但它会一直挂在系统的通知设置里（安卓不允许改渠道，只能由 App 主动删）。
+// 留着会让人看到两条名字一样、都叫「组间休息」的渠道，不知道该看哪条。
 //
-// 【★ 这里全是"读"，一个"写"都没有】
-// 它不改任何状态、不改渠道、不发通知 —— 只是把系统里的现状念出来。
-// 所以它不可能把已经能用的功能弄坏。
+// ★ 只在【新渠道确实建好了】的前提下才删旧的。
+//   万一新渠道没建起来、旧渠道又被删了，通知就无处可去 ——
+//   安卓 8 起，"渠道不存在"的通知会被系统直接丢掉，等于提醒彻底失效。
+//   所以先确认新的在，再动旧的。
 //
-// 【"原生建渠道"那个暗号是哪来的】
-// 见 android/app/src/main/java/.../MainActivity.java。那边建完渠道会往
-// 同一个储物柜里写一行字，这里把它读回来 —— 用来区分"渠道是原生建的"
-// 还是"原生没跑成、退回让插件建了"（插件建的那个没震动节奏）。
-
-export type ChannelDiag = {
-  id: string
-  name: string
-  importance: number
-  vibration: boolean
-  hasSound: boolean
-}
-
-export type NotifyDiag = {
-  channels: ChannelDiag[]
-  pending: number // 现在排在队里、还没到点的提醒有几条（-1 = 读不到）
-  nativeMark: string | null // 原生建渠道留下的暗号
-}
-
-export async function readNotifyDiag(): Promise<NotifyDiag> {
-  const empty: NotifyDiag = { channels: [], pending: -1, nativeMark: null }
-  if (!isNative) return empty
-
-  let channels: ChannelDiag[] = []
+// 删不掉（本来就没有、或者安卓 7 压根没渠道这一层）都是正常的，吞掉。
+async function removeLegacyChannel(): Promise<void> {
   try {
     const res = await LocalNotifications.listChannels()
-    channels = res.channels.map((c) => ({
-      id: c.id,
-      name: c.name,
-      importance: c.importance ?? -1,
-      // 这个 vibration 读的是系统里的真值（插件里对应 shouldVibrate()），
-      // 不是我们请求过什么 —— 渠道建好之后只有系统说了算。
-      vibration: c.vibration === true,
-      hasSound: typeof c.sound === 'string' && c.sound.length > 0,
-    }))
+    const ids = res.channels.map((c) => c.id)
+    if (!ids.includes(CHANNEL_ID)) return // ★ 新的不在，绝不删旧的
+    if (!ids.includes(LEGACY_CHANNEL_ID)) return // 早就没了，不用管
+    await LocalNotifications.deleteChannel({ id: LEGACY_CHANNEL_ID })
   } catch {
-    // 安卓 7 上没有渠道这个东西，读不到就算了
+    // 安卓 7 上没有渠道这一层，插件会直接拒绝。吞掉。
   }
-
-  let pending = -1
-  try {
-    const res = await LocalNotifications.getPending()
-    pending = res.notifications.length
-  } catch {
-    // 读不到就算了，不打扰主人
-  }
-
-  let nativeMark: string | null = null
-  try {
-    const res = await Preferences.get({ key: 'nanofit:diag:native-channel' })
-    nativeMark = res.value
-  } catch {
-    // 读不到就算了
-  }
-
-  return { channels, pending, nativeMark }
-}
-
-// 当前用的是哪个渠道编号。诊断里要显示它，用来核对原生代码里写的是不是同一个。
-export function currentChannelId(): string {
-  return CHANNEL_ID
 }
