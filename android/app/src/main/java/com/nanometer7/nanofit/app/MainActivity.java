@@ -21,16 +21,23 @@ public class MainActivity extends BridgeActivity {
     //   —— 也就是"没有震动节奏"的那个，问题原样保留。
     private static final String REST_CHANNEL_ID = "rest-timer-v2";
 
-    // 建渠道成功后在这儿留个暗号，App 的「诊断」能读回来。
+    // 建渠道之后在这儿留个暗号：'created@<毫秒>' 或 'exists@<毫秒>'。
     //
-    // 【为什么需要这个暗号】
+    // 【为什么需要它】
     // 渠道建好之后，光看"渠道存在"是分不出是谁建的 —— 插件那边也会建同名渠道
     // （对已存在的渠道是空操作）。万一这段原生代码没跑成，插件就顶上去了，
-    // 而插件建出来的正是"没震动节奏"的那个。有了暗号，App 里一眼就能看出
-    // 到底是哪条路生效的，不用再猜。
+    // 而插件建出来的正是"没有震动节奏"的那个（也就是震动不响的那个）。
+    // 有了暗号，就能回答"那次振动不灵，到底是这段 Java 没跑，还是别的原因"，
+    // 不用再猜。这是 2026-09-26 排查震动问题时唯一能分开两条路的证据。
+    //
+    // 【现在谁读它】
+    // 排查时临时加的那块 App 内诊断已经拆掉了（问题查清就不该留在正式版里）。
+    // 这个暗号【保留】，当作下次的线索：它躺在 SharedPreferences 里，
+    // 用 adb 或者以后再临时加一次诊断都能读回来。
     //
     // ★ 键名故意不用 nanofit:v1: 开头 —— 那个前缀是 App 自己的存档，
-    //   由 storage.ts 按固定清单读写，也会进备份。这个只是个调试标记。
+    //   由 storage.ts 按固定清单读写，也会进备份。这个只是个调试标记，
+    //   不进备份、也不参与任何功能。
     private static final String DIAG_KEY = "nanofit:diag:native-channel";
     private static final String PREF_STORE = "CapacitorStorage"; // 和 Preferences 插件同一个柜子
 
