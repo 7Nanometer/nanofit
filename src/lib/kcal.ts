@@ -127,9 +127,16 @@ export function isStaleSession(
 
 // ---------- 力量档位 ----------
 //
-// 四档，MET 值来自 Compendium 官方表里"抗阻训练"那几行。
+// 五档，MET 值来自 Compendium 官方表里"抗阻训练"那几行。
 // MET 的意思是"这段时间里身体在使劲的倍数"：
 // MET 3.5 就是"比躺着不动多烧 3.5 倍"。
+//
+// ★ 数组顺序 = 选档面板上从上到下的顺序，所以必须由弱到强排。
+//
+// ★★ 这是个【数组】不是 Record —— 加档位时编译器不会提醒你。
+//    漏加一条的话，metOf() 会静默按 3.5 算热量、metLabel() 会直接
+//    吐裸英文给用户看。加档位时必须同时改 types.ts 的
+//    STRENGTH_MET_LEVELS，并跑一遍"每一档的 metOf / metLabel 都对"的检查。
 export type MetLevelInfo = {
   key: StrengthMetLevel
   met: number
@@ -144,6 +151,19 @@ export const STRENGTH_MET_INFO: readonly MetLevelInfo[] = [
     met: 3.5,
     label: '中等',
     hint: '常规增肌，8-15 次/组，休息 60-90 秒',
+  },
+  {
+    // 2026-09-26 加的。加它的原因：3.5 到 6.0 之间差了 71%，
+    // 而"23 组、9000kg 容量、RPE 中位数 7.5"这种训练正好落在空档里 ——
+    // 判"中等"太轻、判"高强度"太重，两个都不对。
+    //
+    // ★ 5.0 这个数字不是我编的：Compendium 编码 02052
+    //   「抗阻（重量）训练：深蹲，慢速或爆发完成」就是 5.0 METs。
+    //   其余四档的数值一个都没动。
+    key: 'midHigh',
+    met: 5.0,
+    label: '中高强度',
+    hint: '复合动作、接近力竭但组数不多',
   },
   {
     key: 'high',
@@ -535,37 +555,43 @@ function medianRestSeconds(entries: SetEntry[]): number | null {
   }
   if (gaps.length === 0) return null
 
-  gaps.sort((a, b) => a - b)
-  const mid = Math.floor(gaps.length / 2)
-  // 偶数个时取中间两个的平均，这是中位数的标准算法
-  return gaps.length % 2 === 1 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2
+  return median(gaps)
 }
 
-// 记了 RPE 的那些组，中间的那个数。一条都没记返回 null。
+// 力量组里【填了 RPE】的那些分数。一组都没填就是空数组。
 //
 // 【RPE 是什么】Reps In Reserve 的变体叫法，这里就是"这一组你觉得有多难"，
 // 1-10 分，10 是"再也做不动了"。它是**用户亲口说的**，
 // 比"组间休息多久""练了哪些动作"这两个间接信号准得多。
+//
+// 【为什么丢掉 0 和负数】
+// RPE 是 1-10 的自评，出现 0 或负数说明数据有问题（也可能是手滑输错了），
+// 收进来只会把中位数往下拽。小数（7.5）是允许的，所以不能取整。
+function rpeValues(entries: SetEntry[]): number[] {
+  return entries
+    .map((e) => e.rpe)
+    .filter((v): v is number => v !== undefined && v > 0)
+}
+
+// 一组数的中位数。空数组返回 null。
 //
 // 【为什么取中位数，不取最大值】
 // 热身组的 RPE 常常只有 5-6。取最大值的话，一次训练里只要有一组冲到 10，
 // 整场就被判成高强度 —— 哪怕剩下十几组都很轻松。
 // 中位数回答的是"这次训练典型有多累"，那才是我们要问的问题。
 //
-// 【为什么丢掉 0 和负数】
-// RPE 是 1-10 的自评，出现 0 或负数说明数据有问题（也可能是手滑输错了），
-// 收进来只会把中位数往下拽。小数（7.5）是允许的，所以不能取整。
-function medianRpe(entries: SetEntry[]): number | null {
-  const values = entries
-    .map((e) => e.rpe)
-    .filter((v): v is number => v !== undefined && v > 0)
+// 【为什么不用平均数】中间接个电话、或者去趟洗手间，那一次的数就能把
+// 平均数整个带偏；中位数是"排在正中间的那一个"，不受极端值影响。
+function median(values: number[]): number | null {
   if (values.length === 0) return null
 
-  values.sort((a, b) => a - b)
-  const mid = Math.floor(values.length / 2)
-  return values.length % 2 === 1
-    ? values[mid]
-    : (values[mid - 1] + values[mid]) / 2
+  // 复制一份再排 —— 别把调用方传进来的数组顺序搅乱
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  // 偶数个时取中间两个的平均，这是中位数的标准算法
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
 // ---------- 推荐档位用到的几个门槛 ----------
@@ -578,13 +604,33 @@ function medianRpe(entries: SetEntry[]): number | null {
 // 组间休息短于这个秒数 → 一组接一组，算循环训练
 const LOW_INTENSITY_MAX_REST_SEC = 60
 
-// RPE 到这个分算"很累" → 高强度（10 是再也做不动了）
-const RPE_HIGH_MIN = 8
+// RPE 低于这个分的组算【热身组】，不参与强度判定（2026-09-26 加）。
+//
+// 【为什么要把热身组摘出去】
+// 热身不代表这次训练的强度，让它参与算中位数只会把结果往下拽。
+// 真实案例（主人 9-26 那场）：23 组、9034kg，前 3 组是 RPE 3/4/5 的热身。
+// 不排除 → 中位数 7（判"中等"，偏轻）；排除 → 中位数 7.5（判"中高"，对上了）。
+//
+// 【边界是"低于 6"】也就是 RPE 正好 6 的组算正式组，不算热身。
+const RPE_WARMUP_BELOW = 6
 
-// RPE 到这个分算"有点累" → 中等；低于它算低强度
-const RPE_MODERATE_MIN = 6
+// ★★ 下面三条是【从高到低】挨个判的，注意循环训练那条（8 分）
+//    比"高强度"那条（9 分）**低** —— 这不是笔误，是故意的：
+//    它判的是"喘不上气地连轴转"，和"单组很重"本来就不是一回事。
+//    （2026-09-26 之前"高强度"的门槛也是 8，两条并列分不开；
+//     加了 5.0 那一档之后，它们才各归各位。）
+
+// RPE 到这个分、而且组间休息很短 → 循环训练那种持续输出
+const RPE_CIRCUIT_MIN = 8
+
+// RPE 到这个分算"很重" → 高强度 6.0（10 是再也做不动了）
+const RPE_HIGH_MIN = 9
+
+// RPE 到这个分算"偏重" → 中高强度 5.0（2026-09-26 加的这一档）
+const RPE_MID_HIGH_MIN = 7.5
 
 // "总时长短、组数少"的两个门槛。沾一个就算低强度。
+// ★ 只用在"一组 RPE 都没记"那条路上；记了 RPE 就轮不到它们说话。
 const LOW_INTENSITY_MAX_MIN = 30
 const LOW_INTENSITY_MAX_SETS = 8
 
@@ -634,23 +680,51 @@ export function recommendMetLevel(
   const shortRestSec = rest !== null && rest < LOW_INTENSITY_MAX_REST_SEC ? rest : null
 
   // ---------- ① 第一优先：记了 RPE ----------
-  const rpe = medianRpe(strength)
-  if (rpe !== null) {
-    // RPE 可能是 7.5，所以用原样输出，不做取整
-    const howHard = `你记的 RPE 中位数是 ${rpe}`
+  //
+  // ★ 2026-09-26 改了两件事：
+  //   · 热身组（RPE < RPE_WARMUP_BELOW）摘出去，不让它们把中位数往下拽
+  //   · 档位边界重划（9 / 7.5 / 6），中间补上 5.0 那一档
+  const withRpe = rpeValues(strength)
+  if (withRpe.length > 0) {
+    const work = withRpe.filter((v) => v >= RPE_WARMUP_BELOW)
+    const warmCount = withRpe.length - work.length
 
-    if (rpe >= RPE_HIGH_MIN) {
-      // 又累、休息又短 → 这是循环训练那种持续输出，比单纯"高强度"还高一档
-      if (shortRestSec !== null) {
-        return {
-          level: 'circuit',
-          reason: `${howHard}，而且每组之间只隔了约 ${Math.round(shortRestSec)} 秒`,
-        }
+    // ★ 全是热身（比如纯热身就结束了）：按低强度算。
+    //   注意【不能】因为"正式组为空"就掉到下面那条"猜"的路上去 ——
+    //   那样会猜出个高强度来，和"这场其实没怎么练"正好相反。
+    if (work.length === 0) {
+      return {
+        level: 'low',
+        reason: `你记的 RPE 都在 ${RPE_WARMUP_BELOW} 分以下，这次基本是热身`,
       }
-      return { level: 'high', reason: howHard }
     }
-    if (rpe >= RPE_MODERATE_MIN) return { level: 'moderate', reason: howHard }
-    return { level: 'low', reason: howHard }
+
+    const rpe = median(work)
+    // 上面刚确认 work 非空，所以 rpe 不可能是 null。
+    // 这一行只是让类型收敛，正常永远走不到。
+    if (rpe === null) return { level: 'low', reason: '这次基本是热身' }
+
+    // RPE 可能是 7.5，所以原样输出，不做取整。
+    // ★ 排过热身就必须说出来 —— 不然用户看到"中位数 7.5"会以为自己记错了，
+    //   或者以为系统算错了（他记的原始中位数确实是 7）。
+    const howHard =
+      warmCount > 0
+        ? `你记的 RPE 中位数是 ${rpe}（已排除 ${warmCount} 组热身）`
+        : `你记的 RPE 中位数是 ${rpe}`
+
+    // 又累、休息又短 → 循环训练那种持续输出。
+    // ★ 门槛 8 分比下面"高强度"那条（9 分）低，是故意的，见常量那里的注释。
+    if (rpe >= RPE_CIRCUIT_MIN && shortRestSec !== null) {
+      return {
+        level: 'circuit',
+        reason: `${howHard}，而且每组之间只隔了约 ${Math.round(shortRestSec)} 秒`,
+      }
+    }
+    if (rpe >= RPE_HIGH_MIN) return { level: 'high', reason: howHard }
+    if (rpe >= RPE_MID_HIGH_MIN) return { level: 'midHigh', reason: howHard }
+    // 走到这儿说明 rpe 落在 [6, 7.5) —— 正好是"中等"那一档，
+    // 所以这里不需要再单独设一条门槛常量。
+    return { level: 'moderate', reason: howHard }
   }
 
   // ---------- ② 没记 RPE：退回按训练数据推测 ----------

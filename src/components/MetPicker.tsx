@@ -144,7 +144,7 @@ export function MetPicker({
           )}
         </div>
 
-        {/* ---------- 四档 ---------- */}
+        {/* ---------- 五档（数组顺序 = 从弱到强）---------- */}
         <div className="mb-2 flex flex-wrap gap-2">
           {STRENGTH_MET_INFO.map((item) => {
             const active = item.key === level

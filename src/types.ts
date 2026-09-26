@@ -160,12 +160,24 @@ export type PlannedItem = {
 // ---------- 训练强度档位（热量估算用）----------
 
 // 力量训练没法直接测消耗，只能用 MET 公式推（详见 src/lib/kcal.ts）。
-// MET 是"这段时间里身体在使劲几倍于躺着不动"，这四档是 Compendium
+// MET 是"这段时间里身体在使劲几倍于躺着不动"，这五档是 Compendium
 // 官方表里"抗阻训练"那几行。
 //
 // ★ 这个类型必须定义在 types.ts、而不是 kcal.ts —— 因为它要存进
 //   Settings 和 WorkoutSession，而 types.ts 是全项目"数据形状"的唯一出处。
-export const STRENGTH_MET_LEVELS = ['low', 'moderate', 'high', 'circuit'] as const
+//
+// ★★ 往这个数组里加一档时【编译器不会提醒你任何事】——
+//    kcal.ts 的 STRENGTH_MET_INFO 是个数组不是 Record，全项目也没有
+//    switch 或穷尽映射。漏改的话 metOf() 会静默按 3.5 算、metLabel()
+//    会直接吐裸英文给用户看。加档位时务必把 kcal.ts 那张表一起改掉，
+//    并跑一遍"五档的 metOf / metLabel 都对"的检查。
+export const STRENGTH_MET_LEVELS = [
+  'low',
+  'moderate',
+  'midHigh',
+  'high',
+  'circuit',
+] as const
 
 export type StrengthMetLevel = (typeof STRENGTH_MET_LEVELS)[number]
 
