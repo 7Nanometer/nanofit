@@ -126,6 +126,26 @@ Settings { restSec, rpeEnabled, sex?, birthYear?, theme?, defaultWeightKg?, last
 - 统计页那一节的说明文字（不含运动后持续燃烧、为什么减 1、跟手环对不上是正常的、
   误差 10–20%）**不是客套话，是这个功能的一部分，不许删**。
 
+2026-09-26 按主人决定（修"同一天练两次"）：
+- ★★ **同一天可以有多条 WorkoutSession**。落盘时按 **id** 去重，不按 date：
+  `readSessions().filter(s => s.id !== finished.id)`。
+  ★ 原来写的是 `s.date !== session.date` —— 那等于"这天有过记录就全删掉"，
+  同一天练第二场会把第一场**无声无息地顶掉**。这条从 dcf5890「阶段3-1」
+  （第一个能记训练的版本）就在，属于**已经丢过的数据**，改不回来。
+  ★ 成立的前提：`completedSession()` **不重新生成 id**（它只做
+  `{ ...s, durationSec }`）。以后要改那个函数，必须保住这条 ——
+  否则按 id 去重会失效，变成攒重复。
+  ★ 新写法严格比旧的**更不容易丢数据**：只顶掉 id 相同的那一条。
+- 历史页排序判据从 1 个加到 3 个（`HistoryScreen.tsx`）：
+  ① 日期倒序 ② 同一天内按开始时刻倒序（**晚的在前**，跟整页"最近的在最上面"
+  同方向）③ 兜底按 id。三者合起来保证**任何时候打开顺序都一模一样**；
+  只按日期排的话，同一天谁上谁下由数组原始顺序决定，不是我们说了算。
+  `startedAt` 取不到就退回第一组的完成时间 —— 这个口径抽成了
+  `kcal.ts` 的 `sessionStartISO()`，和 `sessionSeconds()` 共用一份定义。
+  ★ 另外三处只按日期排的地方（`StatsScreen.tsx` 本周列表、`stats.ts` 的
+  `lastSessionDate` / `lastSessionVolume`）**故意不动** —— 它们不给人看列表。
+- ★ 有氧那边不受影响：它不写 sessions，走的是 entries。
+
 localStorage 前缀 nanofit:v1:。读写集中在 src/lib/storage.ts。支持导出/导入 JSON。
 
 ## 界面
@@ -266,7 +286,22 @@ BMI = 体重kg ÷ 身高m²
   不传 = 用系统默认通知音；传了插件只认塞进 App 的音频文件，反而容易变成没声音。
   ⚠️ **渠道的 importance 建好之后改不了**（安卓的限制，不是 bug），第一次就得对。
   ⚠️ 安卓 7 上 `createChannel` 会直接抛错，要包一层 catch。
-- 通知 id **固定 1**，新的顶掉旧的 —— 同一时刻只可能存在一条休息提醒。
+- ★★ **通知 id 按"这条提醒的结束时刻"算，不是固定数字**（2026-09-26 改，踩过大坑）。
+  插件源码里**写死**了一句 `mBuilder.setOnlyAlertOnce(true)`
+  （`LocalNotificationManager.kt:199`，没有任何开关能关掉它）。含义是：
+  **同一个 id 的通知再次出现时，系统当成"更新"——只换文字，不再响、不再震、不弹横幅**。
+  原来这里固定用 1 号（本意是"新的顶掉旧的、不攒一排"），两句一撞 →
+  **当天第一条提醒之后，后面每一条都哑**（看着就是"没震动、也没声音"）。
+  现在 `restNotifyIdFor(endsAt) = 1_000_000 + (endsAt % 10亿)`：
+  · 两次**不同**的休息 → 号不同 → 每条都是全新的一条 → 该响就响、该震就震
+  · **同一次**休息重复预约（App 被杀掉又打开之类）→ 号相同 → 顶掉旧的，不攒两条
+    （这正是原来固定用 1 号想要的效果，保住了）
+  「试一下」另起一段号：`2_000_000_000 + (Date.now() % 1亿)`。
+  ⚠️ 那里的模数**必须是 1 亿**：2,000,000,000 + 99,999,999 正好卡在安卓要求的
+  32 位整数上限 **2,147,483,647** 以下。照抄休息提醒那边的 10 亿会算到 30 亿，
+  **溢出成负数**（这个坑是跑测试当场抓到的，不是推出来的）。
+  ⚠️ 撤销必须按 `lastRestNotifyId` **记下来的那个号**撤（`cancelRest()`），不能写死。
+  ★ **以后再加任何"会重复出现"的通知，都必须换新 id** —— 否则一样会哑。
   `schedule.at` 必须配 `allowWhileIdle: true`（→ `setExactAndAllowWhileIdle`，
   **会唤醒睡着的手机**）。点"跳过"和结束训练时必须**成套取消**，
   否则会出现"已经进下一组了，通知还在响"。
@@ -285,8 +320,21 @@ BMI = 体重kg ÷ 身高m²
   · 插件的 `schedule()` 在没通知权限时**直接 reject**，必须 catch。
 - 小图标 `res/drawable/ic_stat_rest.xml` 是自己画的纯白秒表（在 capacitor.config.ts 里配）。
   不配的话插件会退回系统的"ⓘ"灰图标，看着像别人的通知。
-- ★ 这个功能**只能在装了 APK 的手机上验**。浏览器里整条链路是空转的 ——
-  调试时不会报错，但也测不到任何东西。
+- ★ **真机行为**（响不响、震不震、弹不弹横幅）只能装 APK 用真手机验 ——
+  那是系统的活儿，浏览器里整条链路空转，测不到任何东西。
+  **但"我们发给系统的那串参数"可以在电脑上验**，而且这轮就是靠它才抓到
+  上面那个 32 位溢出的：抢在 App 的代码加载之前预置
+  `window.CapacitorCustomPlatform`（让 `isNativePlatform()` 为 true）
+  和 `window.Capacitor.PluginHeaders`（把方法列成原生方法），
+  再把自己的 `nativePromise` / `nativeCallback` 换成记录器 ——
+  这样 `LocalNotifications.schedule()` 收到的入参会被原样录下来。
+  ⚠️ 两个坑：
+  · `addListener` 只要这个插件**有原生 header 就走原生回调那条路**
+    （core 里 `case 'addListener': return pluginHeader ? addListenerNative : addListener`），
+    **根本不会去实例化网页版实现**。所以"切后台"得自己回调
+    `{ isActive: false }` 来驱动，别指望 `document.visibilitychange`。
+  · 假扮成手机之后 `storage.ts` 会改走 Preferences 插件（不是 localStorage），
+    所以那个也得一起接住，否则 App 写进去的东西一点都看不到。
 
 ## 安卓打包（2026-09-23 加的）
 
