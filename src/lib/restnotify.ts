@@ -38,6 +38,7 @@ import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import type { PermissionState } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
+import { Preferences } from '@capacitor/preferences'
 import { readActiveWorkout } from './storage'
 
 // 现在是不是跑在手机上。浏览器里打开时是 false。
@@ -85,7 +86,25 @@ let lastRestNotifyId: number | null = null
 
 // 通知渠道的编号（安卓 8 起，每条通知都必须属于某个"渠道"）。
 // 详见下面 createChannel() 那段注释。
-const CHANNEL_ID = 'rest-timer'
+//
+// 【为什么从 'rest-timer' 改成了 'rest-timer-v2'】（2026-09-26 第二次修）
+//
+// 真机实测：12 次测试、震动一次都没出现，而且手机的系统设置里，
+// 「组间休息」那个渠道**连"震动"这一项都不显示**。
+//
+// 查下来是两个原因叠在一起：
+//   ① 渠道一旦建好，安卓就不允许 App 再改它 —— 旧渠道不管当初建得对不对，
+//      现在都动不了了。要让新配置生效，只能换一个编号，让系统当成全新渠道。
+//   ② ★ 插件只会调 enableVibration(true)，**从来不给渠道指定震动节奏**
+//      （整个插件里搜不到一处 setVibrationPattern）。而"开了震动开关、
+//      没给节奏"在不少机型上就是不震，系统设置里那一页也不显示"震动"。
+//      所以新渠道必须由我们【自己用原生代码建】，见 MainActivity.java ——
+//      那边建完了，插件这边的 createChannel 就自动变成空操作
+//      （createNotificationChannel 对已存在的渠道是 no-op）。
+//
+// 旧渠道 'rest-timer' 不用管：它再也不会被用到，会在系统设置里慢慢变成
+// 一条没人动的记录。
+const CHANNEL_ID = 'rest-timer-v2'
 
 // 设置页那个「试一下」按钮用【另一段号】。
 // 号段分开，就不会跟真正的休息提醒互相顶掉：
@@ -513,4 +532,80 @@ export async function sendTestNotification(): Promise<boolean> {
     emitStatus()
     return false
   }
+}
+
+// ============================================================
+// 七、诊断（2026-09-26 临时加的，确认完就删）
+// ============================================================
+//
+// 【为什么需要它】
+// 真机上出的问题，在电脑上一点也复现不了：响不响、震不震、那个渠道到底是什么
+// 设置，全只有那台手机知道。与其来回猜（这一轮已经猜错过一次），不如让 App
+// 自己把【从系统里读回来的真值】摆在屏幕上。
+//
+// 【★ 这里全是"读"，一个"写"都没有】
+// 它不改任何状态、不改渠道、不发通知 —— 只是把系统里的现状念出来。
+// 所以它不可能把已经能用的功能弄坏。
+//
+// 【"原生建渠道"那个暗号是哪来的】
+// 见 android/app/src/main/java/.../MainActivity.java。那边建完渠道会往
+// 同一个储物柜里写一行字，这里把它读回来 —— 用来区分"渠道是原生建的"
+// 还是"原生没跑成、退回让插件建了"（插件建的那个没震动节奏）。
+
+export type ChannelDiag = {
+  id: string
+  name: string
+  importance: number
+  vibration: boolean
+  hasSound: boolean
+}
+
+export type NotifyDiag = {
+  channels: ChannelDiag[]
+  pending: number // 现在排在队里、还没到点的提醒有几条（-1 = 读不到）
+  nativeMark: string | null // 原生建渠道留下的暗号
+}
+
+export async function readNotifyDiag(): Promise<NotifyDiag> {
+  const empty: NotifyDiag = { channels: [], pending: -1, nativeMark: null }
+  if (!isNative) return empty
+
+  let channels: ChannelDiag[] = []
+  try {
+    const res = await LocalNotifications.listChannels()
+    channels = res.channels.map((c) => ({
+      id: c.id,
+      name: c.name,
+      importance: c.importance ?? -1,
+      // 这个 vibration 读的是系统里的真值（插件里对应 shouldVibrate()），
+      // 不是我们请求过什么 —— 渠道建好之后只有系统说了算。
+      vibration: c.vibration === true,
+      hasSound: typeof c.sound === 'string' && c.sound.length > 0,
+    }))
+  } catch {
+    // 安卓 7 上没有渠道这个东西，读不到就算了
+  }
+
+  let pending = -1
+  try {
+    const res = await LocalNotifications.getPending()
+    pending = res.notifications.length
+  } catch {
+    // 读不到就算了，不打扰主人
+  }
+
+  let nativeMark: string | null = null
+  try {
+    const res = await Preferences.get({ key: 'nanofit:diag:native-channel' })
+    nativeMark = res.value
+  } catch {
+    // 读不到就算了
+  }
+
+  return { channels, pending, nativeMark }
+}
+
+// 当前用的是哪个渠道编号。诊断里要显示它，用来核对原生代码里写的是不是同一个。
+export function currentChannelId(): string {
+  return CHANNEL_ID
 }
