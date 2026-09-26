@@ -8,7 +8,7 @@ import {
   readSettings,
   writeSessions,
 } from '../lib/storage'
-import { resolveWeightKg } from '../lib/kcal'
+import { resolveWeightKg, sessionStartISO } from '../lib/kcal'
 import { SessionCard } from '../components/SessionCard'
 
 // ============================================================
@@ -36,10 +36,34 @@ export function HistoryScreen() {
 
   const allExercises = mergeExercises(customExercises)
 
-  // 按日期倒序排（最近的在最上面）。
-  // localeCompare 是按文字比较：'2026-09-24' 会排在 '2026-09-23' 前面，
-  // 因为日期写成"年-月-日"这个格式，按文字比就等于按时间比。
-  const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date))
+  // 排序：三个判据，顺序在任何时候都是确定的。
+  //
+  // ① 日期倒序（最近的在最上面）。
+  //    localeCompare 是按文字比较：'2026-09-24' 会排在 '2026-09-23' 前面，
+  //    因为日期写成"年-月-日"这个格式，按文字比就等于按时间比。
+  //
+  // ② 同一天里按"开始时刻"倒序 —— 晚的在前（2026-09-26 加）。
+  //    在这之前同一天只可能有一条：第二场会把第一场顶掉（那个 bug 刚修）。
+  //    能出现两条之后，只按日期排就不够了 —— 同一天谁上谁下会交给
+  //    "数组里原本的先后"去决定，不是我们说了算。
+  //    方向选"晚的在前"，是为了跟整页"最近的在最上面"保持一致：
+  //    你刚练完那一场就停在这一天那组的最上面，不用往下翻。
+  //
+  // ③ 兜底按 id 比。开始时刻完全相同时（比如两条都是没有 startedAt 的
+  //    老记录）至少还有个确定的判据，保证任何时候打开顺序都一模一样。
+  //
+  // startedAt / completedAt 全项目都是用 new Date().toISOString() 写的，
+  // 格式统一，所以按文字比就等于按时间比。
+  const sorted = [...sessions].sort((a, b) => {
+    const byDate = b.date.localeCompare(a.date)
+    if (byDate !== 0) return byDate
+    // 取不到开始时刻的（?? ''）排到当天最后 —— 不崩，也不占前面的位置
+    const byStart = (sessionStartISO(b) ?? '').localeCompare(
+      sessionStartISO(a) ?? '',
+    )
+    if (byStart !== 0) return byStart
+    return a.id.localeCompare(b.id)
+  })
 
   // 按动作筛选：只留下"练过这个动作"的那些训练
   const list =

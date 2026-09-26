@@ -29,6 +29,24 @@ import { secondsBetween } from './date'
 // 给它同样的输入，永远得到同样的输出，不读储物柜、不改任何东西。
 // ============================================================
 
+// ---------- 这次训练"开始于哪一刻" ----------
+//
+// 【为什么单独抽出来】
+// 有两个地方要用这个口径，抽成一个函数让它们共用一份定义
+// （以后要改口径，只改这一处）：
+//   ① 算时长 —— sessionSeconds 的起点
+//   ② 历史页排序 —— 同一天有两条记录时，按开始时刻决定谁在上面
+//
+// 优先用开始时间；老记录没有 startedAt（那时候还没记这个字段），
+// 就退回第一组的完成时间。entries 的数组顺序就是记录顺序，
+// 所以 [0] 就是最早那条。
+//
+// 两个都取不到时返回 undefined —— 意思是"没有这个数据"，
+// 具体怎么办交给调用方（算时长那边会返回 null，排序那边排到当天最后）。
+export function sessionStartISO(session: WorkoutSession): string | undefined {
+  return session.startedAt ?? firstCompletedAt(session.entries)
+}
+
 // ---------- 一次训练练了多久 ----------
 //
 // 优先用记录里存下来的 durationSec；老记录没有这个字段，就现算一个。
@@ -53,9 +71,8 @@ export function sessionSeconds(
     return session.durationSec
   }
 
-  // 开始时刻：优先 startedAt；没有就退回第一组的完成时间。
-  // entries 的数组顺序就是记录顺序，所以 [0] 就是最早那条。
-  const start = session.startedAt ?? firstCompletedAt(session.entries)
+  // 开始时刻：口径见上面 sessionStartISO()，和排序那边共用同一份定义
+  const start = sessionStartISO(session)
   // 结束时刻：调用方给的；没给就用最后一组。
   const end = endISO ?? lastCompletedAt(session.entries)
   if (start === undefined || end === undefined) return null
