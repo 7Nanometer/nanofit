@@ -642,7 +642,23 @@ export function TrainScreen() {
     // 必须"先确认存进历史成功了"，才能清空"正在进行"那一格。
     // 如果反过来先清空，万一存历史失败（比如手机存储满了），
     // 这次训练就两头都没了 —— 彻底丢失，找不回来。
-    const others = readSessions().filter((s) => s.date !== session.date)
+    //
+    // 【为什么按 id 滤，不按日期滤】（2026-09-26 改）
+    //
+    // 原来这里写的是 `s.date !== session.date` —— 按【日期】滤。
+    // 那等于"这天只要有过记录就全删掉"，于是同一天练第二场时，
+    // 第一场被无声无息地顶掉了。
+    //
+    // 改成按【id】滤：id 是这场训练刚创建时就生成好的（addExercise /
+    // applyTemplate / addCardio 三处的 `session ?? { id: newId() }`），
+    // 之后一路不变 —— 上面 completedSession() 只做 `{ ...s, durationSec }`，
+    // 不会重新生成 id，所以 finished.id 就是这场训练自己的那个号。
+    //
+    // 两条性质都保住了：
+    //   · 新练的一场：id 不在历史里 → 谁都不滤 → 追加 → 同一天两场都在
+    //   · 同一场重复保存（存储失败后重试之类）：id 相同 → 顶掉旧的，不攒重复
+    // 而且它严格比原来更不容易丢数据：原来一刀切掉一整天，现在只动一条。
+    const others = readSessions().filter((s) => s.id !== finished.id)
     const saved = writeSessions([...others, finished])
     if (!saved) {
       setStorageError(true)
